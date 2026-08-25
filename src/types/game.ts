@@ -31,6 +31,7 @@ export interface PlayerTrailPoint {
   size: number;
   alpha: number;
   angle: number;
+  isDash?: boolean;
 }
 
 export interface Player {
@@ -42,6 +43,55 @@ export interface Player {
   vx: number;
   vy: number;
   facingAngle: number;
+  // Combat & Survivability (Phase 6)
+  hp: number;
+  maxHp: number;
+  isDashing: boolean;
+  dashTimer: number; // in seconds (e.g. 0.15s)
+  dashCooldown: number; // in seconds (e.g. 1.0s max)
+  attackCooldown: number; // in seconds (e.g. 0.3s max)
+  invulnerabilityTimer: number; // in seconds (e.g. 0.5s after damage)
+}
+
+export interface Enemy {
+  id: number;
+  x: number;
+  y: number;
+  size: number;
+  speed: number;
+  hp: number;
+  maxHp: number;
+  color: string;
+  borderColor: string;
+  glowColor: string;
+  aggroRadius: number; // 300px
+  isAggro: boolean;
+  vx: number;
+  vy: number;
+  facingAngle: number;
+}
+
+export interface SlashAttack {
+  active: boolean;
+  startX: number;
+  startY: number;
+  angle: number;
+  radius: number; // 75px sweep reach
+  arcAngle: number; // e.g. 2.4 radians (~140 deg)
+  timer: number;
+  duration: number; // 0.15s (150ms)
+}
+
+export interface CombatParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  color: string;
+  alpha: number;
+  size: number;
+  life: number;
+  maxLife: number;
 }
 
 export interface WorldObstacle {
@@ -92,6 +142,14 @@ export interface EngineStats {
   nearbyNPC: NPC | null;
   memoryTears: number;
   awakenedNPCsCount: number;
+  // Phase 6 Combat Stats
+  hp: number;
+  maxHp: number;
+  isDashing: boolean;
+  dashCooldownProgress: number; // 0 to 1 (1 = ready)
+  attackCooldownProgress: number; // 0 to 1 (1 = ready)
+  enemiesAlive: number;
+  enemiesDefeated: number;
 }
 
 export interface EngineConfig {

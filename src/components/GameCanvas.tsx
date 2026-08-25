@@ -6,7 +6,7 @@ import { RadarMap } from './RadarMap';
 import { GameControlsOverlay } from './GameControlsOverlay';
 import { VirtualDPad } from './VirtualDPad';
 import { DialogueBox } from './DialogueBox';
-import { Info, Sparkles, Users, Droplets } from 'lucide-react';
+import { Info, Sparkles, Sword, Shield, Zap, Skull } from 'lucide-react';
 
 export const GameCanvas: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -32,6 +32,13 @@ export const GameCanvas: React.FC = () => {
     nearbyNPC: null,
     memoryTears: 1,
     awakenedNPCsCount: 0,
+    hp: 100,
+    maxHp: 100,
+    isDashing: false,
+    dashCooldownProgress: 1,
+    attackCooldownProgress: 1,
+    enemiesAlive: 30,
+    enemiesDefeated: 0,
   });
 
   const [zoom, setZoom] = useState<number>(1.0);
@@ -95,6 +102,15 @@ export const GameCanvas: React.FC = () => {
       engine.stop();
       engineRef.current = null;
     };
+  }, []);
+
+  // Combat actions
+  const handleDash = useCallback(() => {
+    engineRef.current?.triggerDash();
+  }, []);
+
+  const handleAttack = useCallback(() => {
+    engineRef.current?.triggerAttack();
   }, []);
 
   // Dialogue actions
@@ -213,18 +229,18 @@ export const GameCanvas: React.FC = () => {
 
       {/* Top Right: Title Badge & Radar Map */}
       <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2.5 pointer-events-auto">
-        <div className="flex items-center gap-2 rounded-xl border border-amber-500/40 bg-slate-950/90 px-3 py-1.5 backdrop-blur-md shadow-xl shadow-amber-950/20">
-          <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+        <div className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-slate-950/90 px-3 py-1.5 backdrop-blur-md shadow-xl shadow-rose-950/20">
+          <Sword className="w-4 h-4 text-rose-400 animate-pulse" />
           <div className="text-right">
-            <h1 className="text-xs font-bold tracking-wider text-amber-300 font-mono">
-              VÉSPERA: FASE 5
+            <h1 className="text-xs font-bold tracking-wider text-rose-300 font-mono">
+              VÉSPERA: FASE 6
             </h1>
-            <p className="text-[9.5px] text-slate-400 font-mono">A Alma (NPCs & Lágrimas)</p>
+            <p className="text-[9.5px] text-slate-400 font-mono">A Lâmina (Combate & Morte Canônica)</p>
           </div>
           <button
             onClick={() => setShowHelp(!showHelp)}
-            className="ml-1 p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-amber-300 transition"
-            title="Especificações da Fase 5"
+            className="ml-1 p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-rose-300 transition"
+            title="Especificações da Fase 6"
           >
             <Info className="w-3.5 h-3.5" />
           </button>
@@ -237,6 +253,7 @@ export const GameCanvas: React.FC = () => {
             obstacles={engineRef.current.obstacles}
             anchors={engineRef.current.anchors}
             npcs={engineRef.current.npcs}
+            enemies={engineRef.current.enemies}
             worldBounds={engineRef.current.config.worldBounds}
           />
         )}
@@ -256,6 +273,8 @@ export const GameCanvas: React.FC = () => {
           onToggleVignette={handleToggleVignette}
           onForceRupture={handleForceRupture}
           onPlantAnchor={handlePlantAnchor}
+          onDash={handleDash}
+          onAttack={handleAttack}
           onTalkNPC={handleOpenTalk}
           nearbyNPC={stats.nearbyNPC}
           prismsLeft={stats.prismsLeft ?? 3}
@@ -267,11 +286,15 @@ export const GameCanvas: React.FC = () => {
         />
       </div>
 
-      {/* Bottom Left: Touch / Mouse D-Pad for testing */}
+      {/* Bottom Left: Touch / Mouse D-Pad & Combat Actions */}
       <div className="absolute bottom-4 left-4 z-20 pointer-events-auto hidden md:block">
         <div className="flex flex-col items-center gap-1">
-          <VirtualDPad onDirectionChange={handleDirectionChange} />
-          <span className="text-[8.5px] font-mono text-slate-400">Joystick Analógico</span>
+          <VirtualDPad
+            onDirectionChange={handleDirectionChange}
+            onDash={handleDash}
+            onAttack={handleAttack}
+          />
+          <span className="text-[8.5px] font-mono text-slate-400">Controles Mobile (Analógico / Golpe / Dash)</span>
         </div>
       </div>
 
@@ -290,10 +313,10 @@ export const GameCanvas: React.FC = () => {
       {/* Help Modal */}
       {showHelp && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
-          <div className="max-w-lg w-full rounded-2xl border border-amber-500/40 bg-slate-950 p-5 shadow-2xl text-slate-200">
+          <div className="max-w-lg w-full rounded-2xl border border-rose-500/40 bg-slate-950 p-5 shadow-2xl text-slate-200">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
-              <h3 className="text-sm font-bold text-amber-400 font-mono uppercase tracking-wider">
-                VÉSPERA: Especificações da Fase 5 (A Alma)
+              <h3 className="text-sm font-bold text-rose-400 font-mono uppercase tracking-wider">
+                VÉSPERA: Especificações da Fase 6 (A Lâmina)
               </h3>
               <button
                 onClick={() => setShowHelp(false)}
@@ -305,39 +328,51 @@ export const GameCanvas: React.FC = () => {
 
             <div className="space-y-3 text-xs font-mono text-slate-300 leading-relaxed max-h-[70vh] overflow-y-auto pr-1">
               <div>
-                <h4 className="text-amber-300 font-bold mb-0.5">1. Entidades Vivas (NPCs):</h4>
+                <h4 className="text-rose-300 font-bold mb-0.5 flex items-center gap-1.5">
+                  <Sword className="w-3.5 h-3.5" />
+                  1. Combate Ágil Hack and Slash (Clique Esquerdo):
+                </h4>
                 <p className="text-[11px] text-slate-400">
-                  Existem 3 NPCs lendários pelo mundo: <strong className="text-amber-200">Orion, o Sábio</strong> (Floresta de Quartzo), <strong className="text-amber-200">Lyra, a Maga</strong> (Ruínas do Tempo) e <strong className="text-amber-200">Kael, o Ferreiro</strong> (Deserto Carmesim).
+                  Pressione o botão esquerdo do mouse ou o botão de golpe para desferir um corte radiante em arco (<strong className="text-cyan-300">120°</strong>, raio <strong className="text-cyan-300">70px</strong>). Inimigos atingidos sofrem <strong className="text-rose-300">50 de dano</strong>, recuo dinâmico e geram faíscas brilhantes.
                 </p>
               </div>
 
               <div>
-                <h4 className="text-cyan-300 font-bold mb-0.5">2. Interação & Caixa de Diálogos JRPG:</h4>
+                <h4 className="text-amber-300 font-bold mb-0.5 flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5" />
+                  2. Esquiva Rápida / Dash (Barra de Espaço):
+                </h4>
                 <p className="text-[11px] text-slate-400">
-                  Aproxime-se a menos de 80px de qualquer NPC e pressione <strong className="text-amber-300">E</strong> ou clique no botão <strong className="text-amber-300">FALAR (E)</strong>. O jogo pausa o movimento e abre a interface de diálogo.
+                  Pressione <strong className="text-amber-300">Espaço</strong> para executar um Dash ultrarrápido (<strong className="text-amber-200">650 px/s</strong> por 150ms). Durante o Dash, você recebe invulnerabilidade (<strong className="text-amber-200">I-frames</strong>) e atravessa perigos com rastro de luz. Cooldown de 1.0s.
                 </p>
               </div>
 
               <div>
-                <h4 className="text-yellow-300 font-bold mb-0.5">3. Lágrimas da Lembrança & Despertar da Alma:</h4>
+                <h4 className="text-rose-400 font-bold mb-0.5 flex items-center gap-1.5">
+                  <Skull className="w-3.5 h-3.5" />
+                  3. Inimigos (Aberrações Temporais):
+                </h4>
                 <p className="text-[11px] text-slate-400">
-                  Você inicia com <strong className="text-cyan-200">1 Lágrima da Lembrança</strong>. Inicialmente, os NPCs sofrem de amnésia temporal devido ao ciclo. Ao entregar uma Lágrima da Lembrança a um NPC, sua alma é permanentemente despertada!
+                  30 Aberrações carmesins patrulham fora da zona segura inicial. Ao se aproximar a menos de <strong className="text-rose-300">300px</strong>, elas entram em modo de perseguição agressiva com IA física deslizante.
                 </p>
               </div>
 
               <div>
-                <h4 className="text-emerald-300 font-bold mb-0.5">4. Persistência Através dos Ciclos:</h4>
+                <h4 className="text-cyan-300 font-bold mb-0.5 flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5" />
+                  4. Vitalidade (HP) & A Morte Canônica:
+                </h4>
                 <p className="text-[11px] text-slate-400">
-                  Ao forçar uma <strong className="text-rose-300">Ruptura (R)</strong>, os NPCs renascem em novas posições pelo mundo, mas aqueles que foram despertados se lembrarão de você nos ciclos futuros!
+                  Você possui <strong className="text-emerald-300">100 HP</strong>. Ao ser tocado por um inimigo, perde 20 HP, sofre recuo e fica invulnerável por 0.5s. Se o HP chegar a <strong className="text-rose-400">&le; 0</strong>, não há Game Over: a <strong className="text-cyan-300">Tempestade de Vidro (Ruptura)</strong> é imediatamente acionada, você renasce no novo ciclo, preservando as âncoras e o progresso narrativo!
                 </p>
               </div>
             </div>
 
             <button
               onClick={() => setShowHelp(false)}
-              className="mt-4 w-full rounded-xl bg-amber-500/20 border border-amber-400/40 py-2.5 text-xs font-mono text-amber-200 hover:bg-amber-500/30 transition"
+              className="mt-4 w-full rounded-xl bg-rose-500/20 border border-rose-400/40 py-2.5 text-xs font-mono text-rose-200 hover:bg-rose-500/30 transition cursor-pointer"
             >
-              Compreendido
+              Entendido
             </button>
           </div>
         </div>
@@ -345,4 +380,5 @@ export const GameCanvas: React.FC = () => {
     </div>
   );
 };
+
 

@@ -1,5 +1,18 @@
 import React from 'react';
-import { RotateCcw, ZoomIn, ZoomOut, Sparkles, Wind, Eye, SunDim, AlertTriangle, Gem, MessageSquare } from 'lucide-react';
+import {
+  RotateCcw,
+  ZoomIn,
+  ZoomOut,
+  Sparkles,
+  Wind,
+  Eye,
+  SunDim,
+  AlertTriangle,
+  Gem,
+  MessageSquare,
+  Zap,
+  Sword,
+} from 'lucide-react';
 import { NPC } from '../types/game';
 
 interface GameControlsOverlayProps {
@@ -14,6 +27,8 @@ interface GameControlsOverlayProps {
   onToggleVignette: () => void;
   onForceRupture: () => void;
   onPlantAnchor: () => void;
+  onDash?: () => void;
+  onAttack?: () => void;
   onTalkNPC?: () => void;
   nearbyNPC?: NPC | null;
   prismsLeft: number;
@@ -36,6 +51,8 @@ export const GameControlsOverlay: React.FC<GameControlsOverlayProps> = ({
   onToggleVignette,
   onForceRupture,
   onPlantAnchor,
+  onDash,
+  onAttack,
   onTalkNPC,
   nearbyNPC,
   prismsLeft,
@@ -53,6 +70,32 @@ export const GameControlsOverlay: React.FC<GameControlsOverlayProps> = ({
       id="game-controls-toolbar"
       className="flex flex-wrap items-center justify-center gap-1.5 rounded-2xl border border-cyan-500/20 bg-slate-950/85 p-2 backdrop-blur-md shadow-2xl shadow-cyan-950/30"
     >
+      {/* Attack (Slash) Button (LMB / Click) */}
+      {onAttack && (
+        <button
+          id="btn-action-attack"
+          onClick={onAttack}
+          className="flex items-center gap-1.5 rounded-lg border border-cyan-400/80 bg-cyan-950/90 px-3 py-1.5 text-xs font-bold font-mono text-cyan-200 hover:bg-cyan-900 hover:border-cyan-300 active:scale-95 transition shadow-[0_0_12px_rgba(6,182,212,0.4)] cursor-pointer"
+          title="Desferir Golpe de Espada em arco (Clique Esquerdo)"
+        >
+          <Sword className="w-3.5 h-3.5 text-cyan-300" />
+          <span>GOLPE (CLIQUE)</span>
+        </button>
+      )}
+
+      {/* Dash / Esquiva Button (Space) */}
+      {onDash && (
+        <button
+          id="btn-action-dash"
+          onClick={onDash}
+          className="flex items-center gap-1.5 rounded-lg border border-amber-400/80 bg-amber-950/90 px-3 py-1.5 text-xs font-bold font-mono text-amber-200 hover:bg-amber-900 hover:border-amber-300 active:scale-95 transition shadow-[0_0_12px_rgba(245,158,11,0.3)] cursor-pointer"
+          title="Esquiva rápida com invulnerabilidade (Barra de Espaço)"
+        >
+          <Zap className="w-3.5 h-3.5 text-amber-300" />
+          <span>DASH (ESPAÇO)</span>
+        </button>
+      )}
+
       {/* Talk to NPC Button (E) - Active only if near an NPC (<80px) */}
       {hasNearbyNPC && (
         <button
@@ -242,3 +285,4 @@ export const GameControlsOverlay: React.FC<GameControlsOverlayProps> = ({
     </div>
   );
 };
+

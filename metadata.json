@@ -1,6 +1,6 @@
 {
   "name": "VÉSPERA: A Tempestade de Vidro",
-  "description": "Motor 2D Top-Down para RPG/Roguelike - Fase 5: A Alma (NPCs, Sistema de Diálogos JRPG e Lágrimas da Lembrança). Sistema de persistência temporal e metaprogresso de almas despertas em Roguelike de mundo aberto.",
+  "description": "Motor 2D Top-Down para RPG/Roguelike - Fase 6: A Lâmina (Combate Hack and Slash, Dash, Aberrações, HP e Morte Canônica). Sistema ágil de esquiva com I-frames, golpes em arco, IA de perseguição de inimigos e renascimento narrativo pela Ruptura.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

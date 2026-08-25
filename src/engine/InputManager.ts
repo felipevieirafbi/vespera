@@ -5,6 +5,13 @@ export class InputManager {
   private onKeyChangeCallback?: (keys: string[]) => void;
   private virtualVector: Vector2D = { x: 0, y: 0 };
 
+  // Mouse & Combat State (Phase 6)
+  public mouseScreenX: number = 0;
+  public mouseScreenY: number = 0;
+  private isMouseDown: boolean = false;
+  private pendingAttack: boolean = false;
+  private pendingDash: boolean = false;
+
   constructor(onKeyChange?: (keys: string[]) => void) {
     this.onKeyChangeCallback = onKeyChange;
   }
@@ -14,7 +21,35 @@ export class InputManager {
     this.virtualVector.y = y;
   }
 
-  public attach(target: Window | HTMLElement = window): () => void {
+  public triggerDash(): void {
+    this.pendingDash = true;
+  }
+
+  public triggerAttack(): void {
+    this.pendingAttack = true;
+  }
+
+  public consumeDash(): boolean {
+    if (this.pendingDash) {
+      this.pendingDash = false;
+      return true;
+    }
+    // Also check physical Space key
+    if (this.consumeKey('Space') || this.consumeKey(' ')) {
+      return true;
+    }
+    return false;
+  }
+
+  public consumeAttack(): boolean {
+    if (this.pendingAttack) {
+      this.pendingAttack = false;
+      return true;
+    }
+    return false;
+  }
+
+  public attach(target: Window | HTMLElement = window, canvasElement?: HTMLCanvasElement): () => void {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Prevent default scrolling for game controls
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
@@ -31,18 +66,49 @@ export class InputManager {
       this.notifyChange();
     };
 
+    const handleMouseMove = (e: MouseEvent) => {
+      if (canvasElement) {
+        const rect = canvasElement.getBoundingClientRect();
+        this.mouseScreenX = e.clientX - rect.left;
+        this.mouseScreenY = e.clientY - rect.top;
+      } else {
+        this.mouseScreenX = e.clientX;
+        this.mouseScreenY = e.clientY;
+      }
+    };
+
+    const handleMouseDown = (e: MouseEvent) => {
+      if (e.button === 0) { // Left click
+        this.isMouseDown = true;
+        this.pendingAttack = true;
+      }
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (e.button === 0) {
+        this.isMouseDown = false;
+      }
+    };
+
     const handleBlur = () => {
       this.pressedKeys.clear();
+      this.isMouseDown = false;
       this.notifyChange();
     };
 
     target.addEventListener('keydown', handleKeyDown as EventListener);
     target.addEventListener('keyup', handleKeyUp as EventListener);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mouseup', handleMouseUp);
     window.addEventListener('blur', handleBlur);
 
     return () => {
       target.removeEventListener('keydown', handleKeyDown as EventListener);
       target.removeEventListener('keyup', handleKeyUp as EventListener);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('blur', handleBlur);
       this.pressedKeys.clear();
     };
@@ -121,6 +187,8 @@ export class InputManager {
 
   public reset(): void {
     this.pressedKeys.clear();
+    this.pendingAttack = false;
+    this.pendingDash = false;
     this.notifyChange();
   }
 }

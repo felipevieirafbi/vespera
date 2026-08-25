@@ -1,4 +1,16 @@
-import { Player, WorldObstacle, DustParticle, PlayerTrailPoint, EngineStats, EngineConfig, RealityAnchor, NPC } from '../types/game';
+import {
+  Player,
+  WorldObstacle,
+  DustParticle,
+  PlayerTrailPoint,
+  EngineStats,
+  EngineConfig,
+  RealityAnchor,
+  NPC,
+  Enemy,
+  SlashAttack,
+  CombatParticle,
+} from '../types/game';
 import { VirtualCamera } from './Camera';
 import { InputManager } from './InputManager';
 import { WorldGenerator } from './WorldGenerator';
@@ -18,6 +30,13 @@ export class GameEngine {
   public obstacles: WorldObstacle[] = [];
   public particles: DustParticle[] = [];
   public playerTrail: PlayerTrailPoint[] = [];
+
+  // Aberration Enemies (Phase 6)
+  public enemies: Enemy[] = [];
+  public activeSlash: SlashAttack | null = null;
+  public combatParticles: CombatParticle[] = [];
+  public damageVignetteAlpha: number = 0;
+  public enemiesDefeatedCount: number = 0;
 
   // Living Entities (Phase 5 - NPCs)
   public npcs: NPC[] = [];
@@ -78,6 +97,13 @@ export class GameEngine {
     nearbyNPC: null,
     memoryTears: 1,
     awakenedNPCsCount: 0,
+    hp: 100,
+    maxHp: 100,
+    isDashing: false,
+    dashCooldownProgress: 1.0,
+    attackCooldownProgress: 1.0,
+    enemiesAlive: 30,
+    enemiesDefeated: 0,
   };
 
   private frameCount: number = 0;
@@ -102,7 +128,7 @@ export class GameEngine {
     this.camera = new VirtualCamera(0, 0);
     this.inputManager = new InputManager();
 
-    // Player: 30x30 Glowing Cyan (#00FFFF) square at origin
+    // Player: 30x30 Glowing Cyan (#00FFFF) square with Combat attributes
     this.player = {
       x: 0,
       y: 0,
@@ -112,6 +138,13 @@ export class GameEngine {
       vx: 0,
       vy: 0,
       facingAngle: 0,
+      hp: 100,
+      maxHp: 100,
+      isDashing: false,
+      dashTimer: 0,
+      dashCooldown: 0,
+      attackCooldown: 0,
+      invulnerabilityTimer: 0,
     };
 
     this.initWorld();
@@ -122,7 +155,19 @@ export class GameEngine {
     if (this.ruptureState === 'idle') {
       this.ruptureState = 'collapsing';
       this.setDialogueOpen(false);
+      this.activeSlash = null;
     }
+  }
+
+  public triggerDash(): void {
+    this.inputManager.triggerDash();
+  }
+
+  public triggerAttack(customAngle?: number): void {
+    if (customAngle !== undefined) {
+      this.player.facingAngle = customAngle;
+    }
+    this.inputManager.triggerAttack();
   }
 
   public setDialogueOpen(isOpen: boolean): void {
@@ -171,12 +216,36 @@ export class GameEngine {
   }
 
   /**
-   * Initializes 300 procedural cluster obstacles across 3 Biomes & 3 Living NPCs
+   * Initializes 300 procedural cluster obstacles, 3 Living NPCs and 30 Aberration enemies
    */
   public initWorld(): void {
     this.obstacles = WorldGenerator.generateBiomesAndObstacles(300, this.anchors);
     this.npcs = WorldGenerator.generateNPCs(this.anchors);
+    this.enemies = WorldGenerator.generateEnemies(30, this.anchors);
     this.stats.totalObstacles = this.obstacles.length;
+    this.stats.enemiesAlive = this.enemies.length;
+  }
+
+  /**
+   * Spawns radiant crimson explosion particles when an enemy is slain
+   */
+  public spawnCrimsonExplosion(x: number, y: number): void {
+    const colors = ['#f43f5e', '#fb7185', '#e11d48', '#ffffff', '#fda4af', '#9f1239'];
+    for (let i = 0; i < 18; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = Math.random() * 260 + 80;
+      this.combatParticles.push({
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        alpha: 1.0,
+        size: Math.random() * 4 + 1.5,
+        life: 0,
+        maxLife: Math.random() * 0.35 + 0.25, // 250 - 600ms
+      });
+    }
   }
 
   /**
@@ -264,7 +333,7 @@ export class GameEngine {
   };
 
   private update(dt: number): void {
-    // Rupture Trigger
+    // Rupture Trigger (Key R)
     if ((this.inputManager.isKeyPressed('KeyR') || this.inputManager.isKeyPressed('r')) && this.ruptureState === 'idle') {
       this.forceRupture();
     }
@@ -289,6 +358,17 @@ export class GameEngine {
       this.stats.currentCycle = this.currentCycle;
       this.resetPlayerPosition();
       
+      // Restore Player HP and reset combat status on rebirth
+      this.player.hp = this.player.maxHp;
+      this.player.isDashing = false;
+      this.player.dashTimer = 0;
+      this.player.dashCooldown = 0;
+      this.player.attackCooldown = 0;
+      this.player.invulnerabilityTimer = 0;
+      this.activeSlash = null;
+      this.combatParticles = [];
+      this.damageVignetteAlpha = 0;
+
       // ==========================================================
       // FASE 4: A PERSISTÊNCIA NO CALEIDOSCÓPIO (Âncoras de Realidade)
       // ==========================================================
@@ -314,8 +394,10 @@ export class GameEngine {
       this.stats.totalObstacles = this.obstacles.length;
       this.stats.preservedObstaclesCount = this.preservedObstaclesCount;
 
-      // FASE 5: Os NPCs renascem em novas posições aleatórias seguras no novo ciclo
+      // FASE 5 & 6: Re-spawn de NPCs e Aberrações em novas posições aleatórias
       this.npcs = WorldGenerator.generateNPCs(this.anchors);
+      this.enemies = WorldGenerator.generateEnemies(30, this.anchors);
+      this.stats.enemiesAlive = this.enemies.length;
 
       this.ruptureState = 'awakening';
     } else if (this.ruptureState === 'awakening') {
@@ -328,6 +410,130 @@ export class GameEngine {
         this.ruptureState = 'idle';
       }
     }
+
+    // Timers & Cooldown updates
+    this.player.dashCooldown = Math.max(0, this.player.dashCooldown - dt);
+    this.player.attackCooldown = Math.max(0, this.player.attackCooldown - dt);
+    this.player.invulnerabilityTimer = Math.max(0, this.player.invulnerabilityTimer - dt);
+    this.damageVignetteAlpha = Math.max(0, this.damageVignetteAlpha - dt * 2.8);
+
+    // ==========================================================
+    // FASE 6: MOVIMENTO TÁTICO (DASH / ESQUIVA - SPACEBAR)
+    // ==========================================================
+    const wantsDash = this.inputManager.consumeDash();
+    if (
+      wantsDash &&
+      this.player.dashCooldown <= 0 &&
+      !this.player.isDashing &&
+      this.ruptureState === 'idle' &&
+      !this.isDialogueOpen
+    ) {
+      this.player.isDashing = true;
+      this.player.dashTimer = 0.15; // 150ms duration
+      this.player.dashCooldown = 1.0; // 1.0s cooldown
+    }
+
+    if (this.player.isDashing) {
+      this.player.dashTimer -= dt;
+      if (this.player.dashTimer <= 0) {
+        this.player.isDashing = false;
+      }
+    }
+
+    // ==========================================================
+    // FASE 6: AÇÃO DE ATAQUE (A LÂMINA - LEFT CLICK / MOUSE)
+    // ==========================================================
+    const wantsAttack = this.inputManager.consumeAttack();
+    if (
+      wantsAttack &&
+      this.player.attackCooldown <= 0 &&
+      this.ruptureState === 'idle' &&
+      !this.isDialogueOpen
+    ) {
+      // Calculate attack direction towards mouse in world coordinates
+      let attackAngle = this.player.facingAngle;
+      if (this.inputManager.mouseScreenX !== 0 || this.inputManager.mouseScreenY !== 0) {
+        const mouseWorld = this.camera.screenToWorld(
+          this.inputManager.mouseScreenX,
+          this.inputManager.mouseScreenY
+        );
+        attackAngle = Math.atan2(mouseWorld.y - this.player.y, mouseWorld.x - this.player.x);
+      }
+
+      this.player.facingAngle = attackAngle;
+      this.player.attackCooldown = 0.3; // 300ms cooldown
+
+      this.activeSlash = {
+        active: true,
+        startX: this.player.x,
+        startY: this.player.y,
+        angle: attackAngle,
+        radius: 80,
+        arcAngle: Math.PI * 0.85, // ~150 degrees crescent arc
+        timer: 0,
+        duration: 0.15, // 150ms
+      };
+
+      // Slash Hitbox Detection against Enemies
+      const remainingEnemies: Enemy[] = [];
+      let anyEnemyKilled = false;
+
+      for (const enemy of this.enemies) {
+        const dist = Math.hypot(enemy.x - this.player.x, enemy.y - this.player.y);
+        let hit = false;
+
+        // Check if within slash reach radius
+        if (dist <= 80 + enemy.size / 2) {
+          const angleToEnemy = Math.atan2(enemy.y - this.player.y, enemy.x - this.player.x);
+          let diffAngle = angleToEnemy - attackAngle;
+          while (diffAngle < -Math.PI) diffAngle += Math.PI * 2;
+          while (diffAngle > Math.PI) diffAngle -= Math.PI * 2;
+
+          if (Math.abs(diffAngle) <= (Math.PI * 0.85) / 2 + 0.25) {
+            hit = true;
+          }
+        }
+
+        if (hit) {
+          anyEnemyKilled = true;
+          this.enemiesDefeatedCount++;
+          this.spawnCrimsonExplosion(enemy.x, enemy.y);
+        } else {
+          remainingEnemies.push(enemy);
+        }
+      }
+
+      this.enemies = remainingEnemies;
+      this.stats.enemiesAlive = this.enemies.length;
+      this.stats.enemiesDefeated = this.enemiesDefeatedCount;
+
+      if (anyEnemyKilled) {
+        // Impact hitstop camera shake
+        this.shakeX = (Math.random() - 0.5) * 8;
+        this.shakeY = (Math.random() - 0.5) * 8;
+      }
+    }
+
+    // Update Slash VFX timer
+    if (this.activeSlash) {
+      this.activeSlash.timer += dt;
+      this.activeSlash.startX = this.player.x;
+      this.activeSlash.startY = this.player.y;
+      if (this.activeSlash.timer >= this.activeSlash.duration) {
+        this.activeSlash = null;
+      }
+    }
+
+    // Update Combat Particles
+    for (const cp of this.combatParticles) {
+      cp.x += cp.vx * dt;
+      cp.y += cp.vy * dt;
+      cp.vx *= 0.94; // slight air friction
+      cp.vy *= 0.94;
+      cp.life += dt;
+      cp.alpha = Math.max(0, 1 - cp.life / cp.maxLife);
+    }
+    this.combatParticles = this.combatParticles.filter((cp) => cp.life < cp.maxLife);
 
     // Check proximity to all NPCs (< 80px distance)
     let closestNPC: NPC | null = null;
@@ -360,7 +566,18 @@ export class GameEngine {
     }
 
     const isSprinting = this.inputManager.isSprinting();
-    const currentSpeed = this.player.speed * (isSprinting ? this.config.sprintMultiplier : 1.0);
+    let currentSpeed = this.player.speed * (isSprinting ? this.config.sprintMultiplier : 1.0);
+    if (this.player.isDashing) {
+      currentSpeed = this.config.baseSpeed * 3.6; // Sharp 3.6x burst during Dash
+    }
+
+    // If dashing with no active input keys, dash in current facing angle
+    if (this.player.isDashing && moveVector.x === 0 && moveVector.y === 0) {
+      moveVector = {
+        x: Math.cos(this.player.facingAngle),
+        y: Math.sin(this.player.facingAngle),
+      };
+    }
 
     // Vector-based velocity with strict diagonal normalization
     this.player.vx = moveVector.x * currentSpeed;
@@ -368,7 +585,7 @@ export class GameEngine {
 
     const isMoving = moveVector.x !== 0 || moveVector.y !== 0;
 
-    if (isMoving) {
+    if (isMoving && !this.player.isDashing) {
       this.player.facingAngle = Math.atan2(moveVector.y, moveVector.x);
     }
 
@@ -389,21 +606,84 @@ export class GameEngine {
     this.stats.collidingX = collision.collidedX;
     this.stats.collidingY = collision.collidedY;
 
-    // Record Player Light Trail (last 12-15 positions)
+    // ==========================================================
+    // FASE 6: ENEMY AI (AGGRO, PERSEGUIÇÃO & COLISÃO COM JOGADOR)
+    // ==========================================================
+    if (this.ruptureState === 'idle') {
+      for (const enemy of this.enemies) {
+        const distToPlayer = Math.hypot(this.player.x - enemy.x, this.player.y - enemy.y);
+
+        // Aggro Detection (Radius: 300px)
+        if (distToPlayer <= enemy.aggroRadius) {
+          enemy.isAggro = true;
+          const dirX = (this.player.x - enemy.x) / (distToPlayer || 1);
+          const dirY = (this.player.y - enemy.y) / (distToPlayer || 1);
+
+          enemy.vx = dirX * enemy.speed;
+          enemy.vy = dirY * enemy.speed;
+          enemy.facingAngle = Math.atan2(dirY, dirX);
+        } else {
+          enemy.isAggro = false;
+          enemy.vx = 0;
+          enemy.vy = 0;
+        }
+
+        // Resolve Enemy movement with sliding collision
+        const eCollision = CollisionSystem.resolveEntityMovement(
+          enemy,
+          dt,
+          this.obstacles,
+          this.config.worldBounds
+        );
+        enemy.x = eCollision.x;
+        enemy.y = eCollision.y;
+
+        // Check Enemy Contact Collision with Player
+        const contactDist = Math.hypot(this.player.x - enemy.x, this.player.y - enemy.y);
+        const contactRadius = (this.player.size + enemy.size) / 2;
+
+        if (contactDist < contactRadius) {
+          // If player is not dashing and has no i-frames: Take 20 Damage!
+          if (!this.player.isDashing && this.player.invulnerabilityTimer <= 0) {
+            this.player.hp = Math.max(0, this.player.hp - 20);
+            this.player.invulnerabilityTimer = 0.5; // 0.5s I-Frames
+            this.damageVignetteAlpha = 0.7; // Red Screen Flash
+            this.shakeX = (Math.random() - 0.5) * 16;
+            this.shakeY = (Math.random() - 0.5) * 16;
+
+            // Knockback repulsion away from enemy
+            const knockAngle = Math.atan2(this.player.y - enemy.y, this.player.x - enemy.x);
+            this.player.x += Math.cos(knockAngle) * 35;
+            this.player.y += Math.sin(knockAngle) * 35;
+
+            // CANONICAL DEATH: If HP <= 0, trigger Rupture directly!
+            if (this.player.hp <= 0) {
+              this.player.hp = 0;
+              this.forceRupture();
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Record Player Light Trail
     if (this.config.enableTrail) {
       this.trailTimer += dt;
-      if (this.trailTimer >= 0.035) { // record a ghost sample every ~35ms
+      const trailInterval = this.player.isDashing ? 0.015 : 0.035;
+      if (this.trailTimer >= trailInterval) {
         this.trailTimer = 0;
         this.playerTrail.unshift({
           x: this.player.x,
           y: this.player.y,
-          size: this.player.size,
-          alpha: 0.5,
+          size: this.player.size * (this.player.isDashing ? 1.15 : 1.0),
+          alpha: this.player.isDashing ? 0.85 : 0.5,
           angle: this.player.facingAngle,
+          isDash: this.player.isDashing,
         });
 
-        // Limit to max 14 historical trail echoes
-        if (this.playerTrail.length > 14) {
+        // Limit to max 18 historical trail echoes
+        if (this.playerTrail.length > 18) {
           this.playerTrail.pop();
         }
       }
@@ -430,7 +710,7 @@ export class GameEngine {
     // Current Biome determination
     const currentBiomeInfo = WorldGenerator.getBiomeAt(this.player.x, this.player.y);
 
-    // Update telemetry state
+    // Update telemetry stats
     this.stats.deltaTime = dt;
     this.stats.worldX = Math.round(this.player.x);
     this.stats.worldY = Math.round(this.player.y);
@@ -438,6 +718,13 @@ export class GameEngine {
     this.stats.isMoving = isMoving;
     this.stats.activeKeys = this.inputManager.getActiveKeysList();
     this.stats.currentBiome = currentBiomeInfo.name;
+    this.stats.hp = this.player.hp;
+    this.stats.maxHp = this.player.maxHp;
+    this.stats.isDashing = this.player.isDashing;
+    this.stats.dashCooldownProgress = Math.max(0, Math.min(1, 1 - this.player.dashCooldown / 1.0));
+    this.stats.attackCooldownProgress = Math.max(0, Math.min(1, 1 - this.player.attackCooldown / 0.3));
+    this.stats.enemiesAlive = this.enemies.length;
+    this.stats.enemiesDefeated = this.enemiesDefeatedCount;
 
     if (this.onStatsUpdate) {
       this.onStatsUpdate({ ...this.stats });
@@ -456,8 +743,8 @@ export class GameEngine {
     // Apply Virtual Camera matrix
     this.camera.applyTransform(ctx);
 
-    // Apply camera shake if rupturing
-    if (this.ruptureState !== 'idle' && (this.shakeX !== 0 || this.shakeY !== 0)) {
+    // Apply camera shake if rupturing or taking damage/combat hit
+    if (this.shakeX !== 0 || this.shakeY !== 0) {
       ctx.translate(this.shakeX, this.shakeY);
     }
 
@@ -488,25 +775,41 @@ export class GameEngine {
     // 5.5 Living Entities (Phase 5 - NPCs)
     this.renderNPCs(ctx);
 
+    // 5.8 Aberration Enemies (Phase 6)
+    this.renderEnemies(ctx);
+
+    // 5.9 Combat Explosion Particles
+    this.renderCombatParticles(ctx);
+
     // 6. Foreground Parallax Dust
     if (this.config.enableParticles) {
       this.renderParallaxDust(ctx, 1.0);
     }
 
-    // 7. Player Light Trail (Ecos passados diminuindo de tamanho e opacidade)
+    // 7. Player Light Trail
     if (this.config.enableTrail) {
       this.renderPlayerTrail(ctx);
     }
 
-    // 8. Player: Glowing Cyan Anomaly (#00FFFF) with Bloom
+    // 8. Player: Glowing Cyan Anomaly with Dash / Invulnerability flicker
     this.renderPlayer(ctx);
+
+    // 8.5 Crescent Slash VFX (Phase 6)
+    if (this.activeSlash) {
+      this.renderSlash(ctx, this.activeSlash);
+    }
 
     // Restore Camera context to screen-space
     this.camera.restoreTransform(ctx);
 
-    // 9. Cinematographic Vignette (Radial Gradient at viewport edges)
+    // 9. Cinematographic Vignette
     if (this.config.enableVignette) {
       this.renderVignette(ctx, width, height);
+    }
+
+    // 9.5 Red Damage Screen Flash
+    if (this.damageVignetteAlpha > 0) {
+      this.renderDamageOverlay(ctx, width, height, this.damageVignetteAlpha);
     }
 
     // 10. Rupture Flash & Text Overlay
@@ -520,7 +823,7 @@ export class GameEngine {
         ctx.font = 'bold 24px monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('O Caleidoscópio Gira...', width / 2, height / 2);
+        ctx.fillText('O Caleidoscópio Gira... A Lâmina Renasce', width / 2, height / 2);
       }
     }
   }
@@ -829,6 +1132,155 @@ export class GameEngine {
   }
 
   /**
+   * Renders living Enemies (Phase 6 - Aberrações) as aggressive geometric red shapes
+   * with glowing crimson aura and aggro alerts
+   */
+  private renderEnemies(ctx: CanvasRenderingContext2D): void {
+    if (this.enemies.length === 0) return;
+
+    for (const enemy of this.enemies) {
+      if (!this.camera.isVisible(enemy.x - 40, enemy.y - 40, 80, 80, 80)) {
+        continue;
+      }
+
+      ctx.save();
+
+      // Aggro Pulsing Aura
+      if (enemy.isAggro) {
+        ctx.strokeStyle = 'rgba(244, 63, 94, 0.4)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.arc(enemy.x, enemy.y, enemy.aggroRadius * 0.25, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Crimson Glow Blur
+      if (this.config.enableGlow) {
+        ctx.shadowColor = enemy.isAggro ? '#f43f5e' : '#e11d48';
+        ctx.shadowBlur = enemy.isAggro ? 22 : 14;
+      }
+
+      const half = enemy.size / 2;
+
+      // Draw Aberration shape (Diamond with sharp red edges)
+      ctx.fillStyle = enemy.isAggro ? '#881337' : enemy.color;
+      ctx.beginPath();
+      ctx.moveTo(enemy.x, enemy.y - half);
+      ctx.lineTo(enemy.x + half, enemy.y);
+      ctx.lineTo(enemy.x, enemy.y + half);
+      ctx.lineTo(enemy.x - half, enemy.y);
+      ctx.closePath();
+      ctx.fill();
+
+      // Sharp glowing border
+      ctx.strokeStyle = enemy.isAggro ? '#fda4af' : '#fb7185';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Inner pulsating red eye / core
+      ctx.fillStyle = enemy.isAggro ? '#ffe4e6' : '#fda4af';
+      const eyeSize = 6;
+      ctx.fillRect(enemy.x - eyeSize / 2, enemy.y - eyeSize / 2, eyeSize, eyeSize);
+
+      ctx.restore();
+
+      // Aggro Alert Icon
+      if (enemy.isAggro) {
+        ctx.save();
+        ctx.font = 'bold 11px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#f43f5e';
+        ctx.fillText('!', enemy.x, enemy.y - half - 6);
+        ctx.restore();
+      }
+    }
+  }
+
+  /**
+   * Renders Combat Spark and Shard explosion particles
+   */
+  private renderCombatParticles(ctx: CanvasRenderingContext2D): void {
+    if (this.combatParticles.length === 0) return;
+
+    for (const cp of this.combatParticles) {
+      if (!this.camera.isVisible(cp.x - 10, cp.y - 10, 20, 20, 40)) {
+        continue;
+      }
+
+      ctx.save();
+      ctx.globalAlpha = cp.alpha;
+      ctx.fillStyle = cp.color;
+      if (this.config.enableGlow) {
+        ctx.shadowColor = cp.color;
+        ctx.shadowBlur = 10;
+      }
+      ctx.fillRect(cp.x - cp.size / 2, cp.y - cp.size / 2, cp.size, cp.size);
+      ctx.restore();
+    }
+  }
+
+  /**
+   * Renders radiant crescent Slash Attack VFX
+   */
+  private renderSlash(ctx: CanvasRenderingContext2D, slash: SlashAttack): void {
+    const progress = slash.timer / slash.duration; // 0 to 1
+    const alpha = Math.max(0, 1 - progress);
+
+    ctx.save();
+    ctx.translate(slash.startX, slash.startY);
+    ctx.rotate(slash.angle);
+
+    // Outer bright cyan bloom
+    if (this.config.enableGlow) {
+      ctx.shadowColor = '#00FFFF';
+      ctx.shadowBlur = 25;
+    }
+
+    const startArc = -slash.arcAngle / 2;
+    const endArc = slash.arcAngle / 2;
+
+    // Glowing crescent blade body
+    ctx.strokeStyle = `rgba(0, 255, 255, ${alpha * 0.9})`;
+    ctx.lineWidth = 14 * (1 - progress * 0.5);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(0, 0, slash.radius, startArc, endArc);
+    ctx.stroke();
+
+    // Sharp white cutting edge
+    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(0, 0, slash.radius + 2, startArc, endArc);
+    ctx.stroke();
+
+    // Inner flare sparks
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.8})`;
+    const tipX = Math.cos(endArc) * slash.radius;
+    const tipY = Math.sin(endArc) * slash.radius;
+    ctx.fillRect(tipX - 3, tipY - 3, 6, 6);
+
+    ctx.restore();
+  }
+
+  /**
+   * Renders Screen-Space Red Damage Overlay Vignette when player takes damage
+   */
+  private renderDamageOverlay(ctx: CanvasRenderingContext2D, width: number, height: number, alpha: number): void {
+    ctx.save();
+    const grad = ctx.createRadialGradient(width / 2, height / 2, width * 0.2, width / 2, height / 2, width * 0.7);
+    grad.addColorStop(0, 'rgba(225, 29, 72, 0)');
+    grad.addColorStop(0.7, `rgba(225, 29, 72, ${alpha * 0.4})`);
+    grad.addColorStop(1, `rgba(225, 29, 72, ${alpha * 0.85})`);
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+  }
+
+  /**
    * Renders ~150 Ambient Magic Dust particles with real 3D Parallax offset
    */
   private renderParallaxDust(ctx: CanvasRenderingContext2D, maxDepthThreshold: number): void {
@@ -873,12 +1325,15 @@ export class GameEngine {
       // Progress from newest (0.0) to oldest (1.0)
       const factor = (i + 1) / (total + 1);
       
-      // Progressive scale down from 30px to ~10px
+      // Progressive scale down
       const currentSize = echo.size * (1 - factor * 0.65);
-      // Progressive fade from 0.4 to 0.02
-      const currentAlpha = 0.42 * (1 - factor);
+      const baseAlpha = echo.isDash ? 0.75 : 0.42;
+      const currentAlpha = baseAlpha * (1 - factor);
 
-      ctx.fillStyle = `rgba(0, 255, 255, ${currentAlpha})`;
+      ctx.fillStyle = echo.isDash
+        ? `rgba(255, 255, 255, ${currentAlpha})`
+        : `rgba(0, 255, 255, ${currentAlpha})`;
+
       ctx.fillRect(
         echo.x - currentSize / 2,
         echo.y - currentSize / 2,
@@ -886,35 +1341,50 @@ export class GameEngine {
         currentSize
       );
 
-      // Faint central spark
-      ctx.fillStyle = `rgba(255, 255, 255, ${currentAlpha * 0.8})`;
-      const sparkSize = Math.max(2, currentSize * 0.25);
+      // Central spark
+      ctx.fillStyle = `rgba(255, 255, 255, ${currentAlpha * 0.9})`;
+      const sparkSize = Math.max(2, currentSize * (echo.isDash ? 0.45 : 0.25));
       ctx.fillRect(echo.x - sparkSize / 2, echo.y - sparkSize / 2, sparkSize, sparkSize);
     }
   }
 
   /**
-   * Renders the Player: 30x30 Glowing Cyan (#00FFFF) square with shadowBlur=15 and core
+   * Renders the Player: 30x30 Glowing Cyan square with Dash effects & I-frame blinking
    */
   private renderPlayer(ctx: CanvasRenderingContext2D): void {
+    // I-Frames blinking effect
+    if (this.player.invulnerabilityTimer > 0 && !this.player.isDashing) {
+      if (Math.floor(Date.now() / 60) % 2 === 0) {
+        return; // Blink hide
+      }
+    }
+
     const px = this.player.x;
     const py = this.player.y;
     const half = this.player.size / 2;
 
     ctx.save();
-    if (this.config.enableGlow) {
-      ctx.shadowColor = '#00FFFF';
-      ctx.shadowBlur = 20;
+
+    // Dash Shockwave Flare
+    if (this.player.isDashing) {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(px - half - 6, py - half - 6, this.player.size + 12, this.player.size + 12);
     }
 
-    // Outer Neon Cyan Body (#00FFFF)
-    ctx.fillStyle = this.player.color;
+    if (this.config.enableGlow) {
+      ctx.shadowColor = this.player.isDashing ? '#FFFFFF' : '#00FFFF';
+      ctx.shadowBlur = this.player.isDashing ? 32 : 20;
+    }
+
+    // Outer Neon Cyan / White Body
+    ctx.fillStyle = this.player.isDashing ? '#E0F2FE' : this.player.color;
     ctx.fillRect(px - half, py - half, this.player.size, this.player.size);
     ctx.restore();
 
     // Inner pure crystal white core
     ctx.fillStyle = '#FFFFFF';
-    const coreSize = 10;
+    const coreSize = this.player.isDashing ? 14 : 10;
     ctx.fillRect(px - coreSize / 2, py - coreSize / 2, coreSize, coreSize);
 
     // Directional vector indicator (facing angle)

@@ -1,6 +1,23 @@
 import React from 'react';
 import { EngineStats } from '../types/game';
-import { Activity, Compass, Cpu, Gauge, Zap, Shield, Sparkles, Gem, Anchor, Droplets, Users, MessageSquare } from 'lucide-react';
+import {
+  Activity,
+  Compass,
+  Cpu,
+  Gauge,
+  Zap,
+  Shield,
+  Sparkles,
+  Gem,
+  Anchor,
+  Droplets,
+  Users,
+  MessageSquare,
+  Heart,
+  Sword,
+  Skull,
+  Crosshair,
+} from 'lucide-react';
 
 interface TelemetryHUDProps {
   stats: EngineStats;
@@ -9,7 +26,9 @@ interface TelemetryHUDProps {
 
 export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
   const isKeyActive = (key: string) => {
-    return stats.activeKeys.some(k => k.toLowerCase() === key.toLowerCase() || k === `Key${key.toUpperCase()}`);
+    return stats.activeKeys.some(
+      (k) => k.toLowerCase() === key.toLowerCase() || k === `Key${key.toUpperCase()}`
+    );
   };
 
   const getBiomeBadgeColor = (biome: string) => {
@@ -19,6 +38,17 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
   };
 
   const isSliding = (stats.collidingX || stats.collidingY) && stats.isMoving;
+
+  const currentHp = stats.hp ?? 100;
+  const maxHp = stats.maxHp ?? 100;
+  const hpPercent = Math.max(0, Math.min(100, (currentHp / maxHp) * 100));
+
+  // Determine HP bar styling based on remaining health
+  const getHpColor = () => {
+    if (hpPercent > 50) return 'bg-emerald-400 shadow-[0_0_12px_#34d399]';
+    if (hpPercent > 25) return 'bg-amber-400 shadow-[0_0_12px_#fbbf24]';
+    return 'bg-rose-500 shadow-[0_0_15px_#f43f5e] animate-pulse';
+  };
 
   return (
     <div
@@ -32,9 +62,60 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
             <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
             CICLO DE REALIDADE: <span className="text-white text-sm ml-0.5">{stats.currentCycle}</span>
           </h1>
-          <span className="text-[10px] font-mono text-amber-400/90 bg-amber-950/60 border border-amber-500/40 px-1.5 py-0.5 rounded">
-            FASE 5: A ALMA
+          <span className="text-[10px] font-mono text-rose-300 bg-rose-950/80 border border-rose-500/50 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(244,63,94,0.3)]">
+            FASE 6: A LÂMINA
           </span>
+        </div>
+
+        {/* Phase 6: NEON PLAYER HEALTH BAR */}
+        <div className="rounded-lg border border-slate-800 bg-slate-900/90 p-2 font-mono">
+          <div className="flex items-center justify-between text-[11px] mb-1">
+            <div className="flex items-center gap-1.5">
+              <Heart className={`w-3.5 h-3.5 ${hpPercent <= 25 ? 'text-rose-500 animate-bounce' : 'text-emerald-400'}`} />
+              <span className="font-bold text-slate-200">VITALIDADE (HP)</span>
+            </div>
+            <span className="font-bold text-xs">
+              <span className={hpPercent <= 25 ? 'text-rose-400' : 'text-emerald-300'}>{currentHp}</span>
+              <span className="text-slate-500 font-normal"> / {maxHp}</span>
+            </span>
+          </div>
+
+          <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-slate-950 border border-slate-800">
+            <div
+              className={`h-full transition-all duration-150 ease-out ${getHpColor()}`}
+              style={{ width: `${hpPercent}%` }}
+            />
+          </div>
+
+          {/* Combat Status Grid (Dash Cooldown, Attack Readiness & Enemies) */}
+          <div className="grid grid-cols-3 gap-1 mt-1.5 pt-1.5 border-t border-slate-800/80 text-[10px]">
+            {/* Dash Cooldown */}
+            <div className="flex items-center justify-between bg-slate-950/60 border border-slate-800 rounded px-1.5 py-0.5">
+              <span className="text-slate-400">DASH:</span>
+              <span className={`font-bold ${(stats.dashCooldownProgress ?? 1) >= 1 ? 'text-cyan-300' : 'text-amber-400'}`}>
+                {(stats.dashCooldownProgress ?? 1) >= 1 ? 'PRONTO' : `${Math.round((stats.dashCooldownProgress ?? 0) * 100)}%`}
+              </span>
+            </div>
+
+            {/* Attack Readiness */}
+            <div className="flex items-center justify-between bg-slate-950/60 border border-slate-800 rounded px-1.5 py-0.5">
+              <span className="text-slate-400">GOLPE:</span>
+              <span className={`font-bold ${(stats.attackCooldownProgress ?? 1) >= 1 ? 'text-cyan-300' : 'text-amber-400'}`}>
+                {(stats.attackCooldownProgress ?? 1) >= 1 ? 'PRONTO' : 'RECARGA'}
+              </span>
+            </div>
+
+            {/* Aberrations Slain */}
+            <div className="flex items-center justify-between bg-rose-950/40 border border-rose-900/60 rounded px-1.5 py-0.5">
+              <span className="text-rose-400 flex items-center gap-0.5">
+                <Skull className="w-2.5 h-2.5" />
+                <span>INIM:</span>
+              </span>
+              <span className="font-bold text-rose-300">
+                {stats.enemiesAlive ?? 0}
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Metaprogress Bar (Prisms, Anchors, Memory Tears, Awakened Souls) */}
@@ -133,8 +214,8 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
             </div>
             <div className="mt-1 font-bold text-slate-100 flex items-center justify-between text-[11.5px]">
               <span>{stats.speed} <span className="text-[9.5px] font-normal text-slate-400">px/s</span></span>
-              <span className={`text-[9.5px] px-1 rounded font-normal ${stats.isMoving ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-500'}`}>
-                {stats.isMoving ? 'NORMAL' : 'PARADO'}
+              <span className={`text-[9.5px] px-1 rounded font-normal ${stats.isDashing ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-400/50' : stats.isMoving ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-500'}`}>
+                {stats.isDashing ? 'DASH' : stats.isMoving ? 'NORMAL' : 'PARADO'}
               </span>
             </div>
           </div>
@@ -187,8 +268,8 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
       {/* Real-time Keyboard Visualizer */}
       <div className="rounded-xl border border-slate-800/90 bg-slate-950/75 p-2 backdrop-blur-md">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[9.5px] font-mono uppercase text-slate-400">Entrada Vetorial & Ações</span>
-          <span className="text-[9.5px] font-mono text-cyan-400/80">WASD / E (Falar) / F (Prisma) / R</span>
+          <span className="text-[9.5px] font-mono uppercase text-slate-400">Controles de Ação & Combate</span>
+          <span className="text-[9.5px] font-mono text-cyan-400/80">WASD / SPACE (Dash) / CLIQUE (Atacar)</span>
         </div>
 
         <div className="flex justify-center gap-1 font-mono text-xs select-none">
@@ -229,14 +310,14 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
             D
           </div>
 
-          {/* Shift Sprint key */}
-          <div className={`ml-0.5 px-1.5 h-8 flex items-center justify-center rounded border self-end text-[10px] transition-all ${
-            isKeyActive('shiftleft') || isKeyActive('shiftright') || isKeyActive('shift')
-              ? 'border-amber-400 bg-amber-500/30 text-amber-200 shadow-[0_0_8px_#f59e0b]'
-              : 'border-slate-800 bg-slate-900/60 text-slate-500'
-          }`}>
+          {/* Space Dash key */}
+          <div className={`px-2 h-8 flex items-center justify-center rounded border self-end text-[10.5px] font-bold transition-all ${
+            isKeyActive(' ') || isKeyActive('space')
+              ? 'border-cyan-300 bg-cyan-500/40 text-white shadow-[0_0_12px_#00FFFF]'
+              : 'border-cyan-900/80 bg-cyan-950/40 text-cyan-400'
+          }`} title="Esquiva / Dash Rápido (Space)">
             <Zap className="w-3 h-3 mr-0.5" />
-            SHIFT
+            DASH
           </div>
 
           {/* E Talk Key */}
@@ -270,3 +351,4 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
     </div>
   );
 };
+

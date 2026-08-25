@@ -1,4 +1,4 @@
-import { WorldObstacle, BiomeType, RealityAnchor, NPC } from '../types/game';
+import { WorldObstacle, BiomeType, RealityAnchor, NPC, Enemy } from '../types/game';
 
 interface BiomeZone {
   type: BiomeType;
@@ -13,6 +13,54 @@ interface BiomeZone {
 }
 
 export class WorldGenerator {
+  /**
+   * Generates ~30 Aberration enemies scattered across the world, outside the safe central area (>350px)
+   */
+  public static generateEnemies(count: number = 30, existingAnchors: RealityAnchor[] = []): Enemy[] {
+    const enemies: Enemy[] = [];
+    let attempts = 0;
+
+    while (enemies.length < count && attempts < 500) {
+      attempts++;
+      const x = Math.round((Math.random() - 0.5) * 3600); // -1800 to +1800
+      const y = Math.round((Math.random() - 0.5) * 3600);
+
+      // Must be at least 380px away from the center (safe awaken spawn area)
+      const distFromCenter = Math.hypot(x, y);
+      if (distFromCenter < 380) {
+        continue;
+      }
+
+      // Avoid placing right on top of another enemy
+      const tooCloseToOtherEnemy = enemies.some(
+        (e) => Math.hypot(e.x - x, e.y - y) < 80
+      );
+      if (tooCloseToOtherEnemy) {
+        continue;
+      }
+
+      enemies.push({
+        id: 2000 + enemies.length,
+        x,
+        y,
+        size: 22,
+        speed: 130 + Math.random() * 35, // 130 - 165 px/s
+        hp: 1,
+        maxHp: 1,
+        color: '#4c0519',
+        borderColor: '#f43f5e',
+        glowColor: '#e11d48',
+        aggroRadius: 300,
+        isAggro: false,
+        vx: 0,
+        vy: 0,
+        facingAngle: Math.random() * Math.PI * 2,
+      });
+    }
+
+    return enemies;
+  }
+
   /**
    * Generates 3 fixed named NPCs placed safely across each of the 3 biomes
    */

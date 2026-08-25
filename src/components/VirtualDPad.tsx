@@ -1,10 +1,17 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { Zap, Sword } from 'lucide-react';
 
 interface VirtualDPadProps {
   onDirectionChange: (dx: number, dy: number) => void;
+  onDash?: () => void;
+  onAttack?: () => void;
 }
 
-export const VirtualDPad: React.FC<VirtualDPadProps> = ({ onDirectionChange }) => {
+export const VirtualDPad: React.FC<VirtualDPadProps> = ({
+  onDirectionChange,
+  onDash,
+  onAttack,
+}) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [knobPos, setKnobPos] = useState({ x: 0, y: 0 });
   const [active, setActive] = useState(false);
@@ -101,33 +108,70 @@ export const VirtualDPad: React.FC<VirtualDPadProps> = ({ onDirectionChange }) =
   }, [active]);
 
   return (
-    <div
-      id="virtual-dpad-container"
-      ref={containerRef}
-      onMouseDown={(e) => handleStart(e.clientX, e.clientY)}
-      onTouchStart={(e) => {
-        const t = e.changedTouches[0];
-        handleStart(t.clientX, t.clientY, t.identifier);
-      }}
-      className={`relative w-28 h-28 rounded-full border border-cyan-500/30 bg-slate-950/70 backdrop-blur-md flex items-center justify-center select-none touch-none cursor-pointer transition-colors ${
-        active ? 'border-cyan-400 bg-cyan-950/30 shadow-[0_0_15px_rgba(0,255,255,0.2)]' : ''
-      }`}
-    >
-      {/* Direction Crosshairs */}
-      <div className="absolute w-full h-[1px] bg-slate-800 pointer-events-none" />
-      <div className="absolute h-full w-[1px] bg-slate-800 pointer-events-none" />
-
-      {/* Center knob */}
+    <div className="flex items-center gap-3">
+      {/* Analog Joystick */}
       <div
-        className="absolute w-10 h-10 rounded-full border border-cyan-400 bg-cyan-500/50 backdrop-blur-sm shadow-[0_0_10px_#00FFFF] pointer-events-none transition-transform duration-75"
-        style={{
-          transform: `translate(${knobPos.x}px, ${knobPos.y}px)`,
+        id="virtual-dpad-container"
+        ref={containerRef}
+        onMouseDown={(e) => handleStart(e.clientX, e.clientY)}
+        onTouchStart={(e) => {
+          const t = e.changedTouches[0];
+          handleStart(t.clientX, t.clientY, t.identifier);
         }}
+        className={`relative w-28 h-28 rounded-full border border-cyan-500/30 bg-slate-950/70 backdrop-blur-md flex items-center justify-center select-none touch-none cursor-pointer transition-colors ${
+          active ? 'border-cyan-400 bg-cyan-950/30 shadow-[0_0_15px_rgba(0,255,255,0.2)]' : ''
+        }`}
       >
-        <div className="w-full h-full flex items-center justify-center">
-          <div className="w-2 h-2 rounded-full bg-white" />
+        {/* Direction Crosshairs */}
+        <div className="absolute w-full h-[1px] bg-slate-800 pointer-events-none" />
+        <div className="absolute h-full w-[1px] bg-slate-800 pointer-events-none" />
+
+        {/* Center knob */}
+        <div
+          className="absolute w-10 h-10 rounded-full border border-cyan-400 bg-cyan-500/50 backdrop-blur-sm shadow-[0_0_10px_#00FFFF] pointer-events-none transition-transform duration-75"
+          style={{
+            transform: `translate(${knobPos.x}px, ${knobPos.y}px)`,
+          }}
+        >
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="w-2 h-2 rounded-full bg-white" />
+          </div>
         </div>
+      </div>
+
+      {/* Action Buttons (Dash & Attack) */}
+      <div className="flex flex-col gap-2">
+        {onAttack && (
+          <button
+            id="mobile-btn-attack"
+            onClick={onAttack}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+              onAttack();
+            }}
+            className="w-12 h-12 rounded-full border border-cyan-400 bg-cyan-500/30 text-cyan-200 flex items-center justify-center shadow-[0_0_10px_#00FFFF] active:scale-90 transition font-mono font-bold text-xs"
+            title="Golpe de Espada (Clique)"
+          >
+            <Sword className="w-5 h-5" />
+          </button>
+        )}
+
+        {onDash && (
+          <button
+            id="mobile-btn-dash"
+            onClick={onDash}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+              onDash();
+            }}
+            className="w-12 h-12 rounded-full border border-amber-400 bg-amber-500/30 text-amber-200 flex items-center justify-center shadow-[0_0_10px_#f59e0b] active:scale-90 transition font-mono font-bold text-xs"
+            title="Esquiva / Dash (Espaço)"
+          >
+            <Zap className="w-5 h-5" />
+          </button>
+        )}
       </div>
     </div>
   );
 };
+

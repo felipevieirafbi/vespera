@@ -1,5 +1,5 @@
 import React from 'react';
-import { WorldObstacle, RealityAnchor, NPC } from '../types/game';
+import { WorldObstacle, RealityAnchor, NPC, Enemy } from '../types/game';
 
 interface RadarMapProps {
   playerX: number;
@@ -7,6 +7,7 @@ interface RadarMapProps {
   obstacles: WorldObstacle[];
   anchors?: RealityAnchor[];
   npcs?: NPC[];
+  enemies?: Enemy[];
   worldBounds: { minX: number; maxX: number; minY: number; maxY: number };
 }
 
@@ -16,6 +17,7 @@ export const RadarMap: React.FC<RadarMapProps> = ({
   obstacles,
   anchors = [],
   npcs = [],
+  enemies = [],
   worldBounds,
 }) => {
   const mapSize = 140;
@@ -123,6 +125,21 @@ export const RadarMap: React.FC<RadarMapProps> = ({
           );
         })}
 
+        {/* Phase 6: Living Enemies (Aberrações) on Radar (Aggressive Crimson) */}
+        {enemies.map((enemy) => {
+          const ePos = toRadar(enemy.x, enemy.y);
+          return (
+            <div
+              key={`radar-enemy-${enemy.id}`}
+              className={`absolute w-1.5 h-1.5 -ml-[3px] -mt-[3px] rotate-45 border border-rose-300 ${
+                enemy.isAggro ? 'bg-rose-500 shadow-[0_0_6px_#f43f5e] z-15' : 'bg-rose-700/80 z-10'
+              }`}
+              style={{ left: `${ePos.x}px`, top: `${ePos.y}px` }}
+              title={`Aberração (${enemy.hp} HP)`}
+            />
+          );
+        })}
+
         {/* Player Blip */}
         <div
           className="absolute w-3 h-3 -ml-1.5 -mt-1.5 rounded-sm bg-cyan-400 shadow-[0_0_8px_#00FFFF] border border-white transition-all duration-75 z-20"
@@ -144,7 +161,12 @@ export const RadarMap: React.FC<RadarMapProps> = ({
           <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />
           <span>Carmesim</span>
         </div>
+        <div className="flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rotate-45 bg-rose-500" />
+          <span className="text-rose-300">Inimigo</span>
+        </div>
       </div>
     </div>
   );
 };
+

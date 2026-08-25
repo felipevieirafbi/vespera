@@ -159,4 +159,102 @@ export class CollisionSystem {
       hitObstacle: hitObs,
     };
   }
+
+  /**
+   * Continuous AABB sliding collision for general entities (e.g. Aberration enemies)
+   */
+  public static resolveEntityMovement(
+    entity: { x: number; y: number; size: number; vx: number; vy: number },
+    dt: number,
+    obstacles: WorldObstacle[],
+    worldBounds: { minX: number; maxX: number; minY: number; maxY: number }
+  ): { x: number; y: number; collidedX: boolean; collidedY: boolean } {
+    const halfSize = entity.size / 2;
+    let newX = entity.x;
+    let newY = entity.y;
+    let collidedX = false;
+    let collidedY = false;
+
+    // Filter nearby obstacles only
+    const checkRadius = 150;
+    const nearbyObstacles = obstacles.filter(
+      (obs) => Math.hypot(obs.x - entity.x, obs.y - entity.y) < checkRadius + Math.max(obs.width, obs.height)
+    );
+
+    // Resolve X
+    if (entity.vx !== 0) {
+      let safeX = entity.x + entity.vx * dt;
+      if (safeX - halfSize < worldBounds.minX) {
+        safeX = worldBounds.minX + halfSize;
+        collidedX = true;
+      } else if (safeX + halfSize > worldBounds.maxX) {
+        safeX = worldBounds.maxX - halfSize;
+        collidedX = true;
+      }
+
+      const pYmin = entity.y - halfSize + 0.1;
+      const pYmax = entity.y + halfSize - 0.1;
+
+      for (const obs of nearbyObstacles) {
+        const obsXmin = obs.x - obs.width / 2;
+        const obsXmax = obs.x + obs.width / 2;
+        const obsYmin = obs.y - obs.height / 2;
+        const obsYmax = obs.y + obs.height / 2;
+
+        if (pYmax > obsYmin && pYmin < obsYmax) {
+          const targetXmin = safeX - halfSize;
+          const targetXmax = safeX + halfSize;
+
+          if (targetXmax > obsXmin && targetXmin < obsXmax) {
+            collidedX = true;
+            if (entity.vx > 0) {
+              safeX = Math.min(safeX, obsXmin - halfSize);
+            } else if (entity.vx < 0) {
+              safeX = Math.max(safeX, obsXmax + halfSize);
+            }
+          }
+        }
+      }
+      newX = safeX;
+    }
+
+    // Resolve Y
+    if (entity.vy !== 0) {
+      let safeY = entity.y + entity.vy * dt;
+      if (safeY - halfSize < worldBounds.minY) {
+        safeY = worldBounds.minY + halfSize;
+        collidedY = true;
+      } else if (safeY + halfSize > worldBounds.maxY) {
+        safeY = worldBounds.maxY - halfSize;
+        collidedY = true;
+      }
+
+      const pXmin = newX - halfSize + 0.1;
+      const pXmax = newX + halfSize - 0.1;
+
+      for (const obs of nearbyObstacles) {
+        const obsXmin = obs.x - obs.width / 2;
+        const obsXmax = obs.x + obs.width / 2;
+        const obsYmin = obs.y - obs.height / 2;
+        const obsYmax = obs.y + obs.height / 2;
+
+        if (pXmax > obsXmin && pXmin < obsXmax) {
+          const targetYmin = safeY - halfSize;
+          const targetYmax = safeY + halfSize;
+
+          if (targetYmax > obsYmin && targetYmin < obsYmax) {
+            collidedY = true;
+            if (entity.vy > 0) {
+              safeY = Math.min(safeY, obsYmin - halfSize);
+            } else if (entity.vy < 0) {
+              safeY = Math.max(safeY, obsYmax + halfSize);
+            }
+          }
+        }
+      }
+      newY = safeY;
+    }
+
+    return { x: newX, y: newY, collidedX, collidedY };
+  }
 }
