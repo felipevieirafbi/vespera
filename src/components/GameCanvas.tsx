@@ -6,9 +6,14 @@ import { RadarMap } from './RadarMap';
 import { GameControlsOverlay } from './GameControlsOverlay';
 import { VirtualDPad } from './VirtualDPad';
 import { DialogueBox } from './DialogueBox';
-import { Info, Sparkles, Sword, Shield, Zap, Skull } from 'lucide-react';
+import { Info, Sparkles, Sword, Shield, Zap, Skull, Home, Trophy } from 'lucide-react';
 
-export const GameCanvas: React.FC = () => {
+interface GameCanvasProps {
+  onVictory: (finalStats: EngineStats) => void;
+  onReturnToMenu?: () => void;
+}
+
+export const GameCanvas: React.FC<GameCanvasProps> = ({ onVictory, onReturnToMenu }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<GameEngine | null>(null);
 
@@ -39,6 +44,12 @@ export const GameCanvas: React.FC = () => {
     attackCooldownProgress: 1,
     enemiesAlive: 30,
     enemiesDefeated: 0,
+    bossHp: 500,
+    bossMaxHp: 500,
+    bossAlive: true,
+    bossDistance: 9999,
+    bossAggro: false,
+    victoryItemSpawned: false,
   });
 
   const [zoom, setZoom] = useState<number>(1.0);
@@ -65,7 +76,7 @@ export const GameCanvas: React.FC = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Create Game Engine with dialogue callback
+    // Create Game Engine with dialogue & victory callbacks
     const engine = new GameEngine(
       canvas,
       (newStats) => {
@@ -73,6 +84,10 @@ export const GameCanvas: React.FC = () => {
       },
       (npcToTalk) => {
         setActiveDialogueNPC(npcToTalk);
+      },
+      () => {
+        // Trigger Victory callback to React parent!
+        onVictory(engine.getStats());
       }
     );
     engineRef.current = engine;
@@ -102,7 +117,7 @@ export const GameCanvas: React.FC = () => {
       engine.stop();
       engineRef.current = null;
     };
-  }, []);
+  }, [onVictory]);
 
   // Combat actions
   const handleDash = useCallback(() => {
@@ -229,18 +244,27 @@ export const GameCanvas: React.FC = () => {
 
       {/* Top Right: Title Badge & Radar Map */}
       <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2.5 pointer-events-auto">
-        <div className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-slate-950/90 px-3 py-1.5 backdrop-blur-md shadow-xl shadow-rose-950/20">
-          <Sword className="w-4 h-4 text-rose-400 animate-pulse" />
+        <div className="flex items-center gap-2 rounded-xl border border-cyan-500/40 bg-slate-950/90 px-3 py-1.5 backdrop-blur-md shadow-xl shadow-cyan-950/20">
+          <Sparkles className="w-4 h-4 text-cyan-400 animate-spin" style={{ animationDuration: '8s' }} />
           <div className="text-right">
-            <h1 className="text-xs font-bold tracking-wider text-rose-300 font-mono">
-              VÉSPERA: FASE 6
+            <h1 className="text-xs font-bold tracking-wider text-cyan-300 font-mono">
+              VÉSPERA: FASE 7
             </h1>
-            <p className="text-[9.5px] text-slate-400 font-mono">A Lâmina (Combate & Morte Canônica)</p>
+            <p className="text-[9.5px] text-slate-400 font-mono">O Encanto Final (Chefão & Áudio Procedural)</p>
           </div>
+          {onReturnToMenu && (
+            <button
+              onClick={onReturnToMenu}
+              className="ml-1 p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-cyan-300 transition"
+              title="Voltar ao Menu Principal"
+            >
+              <Home className="w-3.5 h-3.5" />
+            </button>
+          )}
           <button
             onClick={() => setShowHelp(!showHelp)}
-            className="ml-1 p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-rose-300 transition"
-            title="Especificações da Fase 6"
+            className="p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-cyan-300 transition"
+            title="Especificações da Fase 7"
           >
             <Info className="w-3.5 h-3.5" />
           </button>
@@ -254,6 +278,8 @@ export const GameCanvas: React.FC = () => {
             anchors={engineRef.current.anchors}
             npcs={engineRef.current.npcs}
             enemies={engineRef.current.enemies}
+            boss={engineRef.current.boss}
+            victoryItem={engineRef.current.victoryItem}
             worldBounds={engineRef.current.config.worldBounds}
           />
         )}
@@ -313,10 +339,10 @@ export const GameCanvas: React.FC = () => {
       {/* Help Modal */}
       {showHelp && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
-          <div className="max-w-lg w-full rounded-2xl border border-rose-500/40 bg-slate-950 p-5 shadow-2xl text-slate-200">
+          <div className="max-w-lg w-full rounded-2xl border border-cyan-500/40 bg-slate-950 p-5 shadow-2xl text-slate-200">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
-              <h3 className="text-sm font-bold text-rose-400 font-mono uppercase tracking-wider">
-                VÉSPERA: Especificações da Fase 6 (A Lâmina)
+              <h3 className="text-sm font-bold text-cyan-300 font-mono uppercase tracking-wider">
+                VÉSPERA: Especificações da Fase 7 (O Encanto Final)
               </h3>
               <button
                 onClick={() => setShowHelp(false)}
@@ -328,49 +354,49 @@ export const GameCanvas: React.FC = () => {
 
             <div className="space-y-3 text-xs font-mono text-slate-300 leading-relaxed max-h-[70vh] overflow-y-auto pr-1">
               <div>
-                <h4 className="text-rose-300 font-bold mb-0.5 flex items-center gap-1.5">
-                  <Sword className="w-3.5 h-3.5" />
-                  1. Combate Ágil Hack and Slash (Clique Esquerdo):
+                <h4 className="text-rose-400 font-bold mb-0.5 flex items-center gap-1.5">
+                  <Skull className="w-3.5 h-3.5" />
+                  1. O Senhor do Fragmento (Chefão Epico):
                 </h4>
                 <p className="text-[11px] text-slate-400">
-                  Pressione o botão esquerdo do mouse ou o botão de golpe para desferir um corte radiante em arco (<strong className="text-cyan-300">120°</strong>, raio <strong className="text-cyan-300">70px</strong>). Inimigos atingidos sofrem <strong className="text-rose-300">50 de dano</strong>, recuo dinâmico e geram faíscas brilhantes.
+                  Um colosso geométrico de <strong className="text-rose-300">500 HP</strong> com anéis orbitais giratórios de obsidiana carmesim. Ao detectar o jogador a menos de <strong className="text-rose-300">600px</strong>, dispara rajadas em leque de 3 projéteis de energia destrutiva a cada 2 segundos.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="text-cyan-300 font-bold mb-0.5 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  2. Condição de Vitória (Coração do Caleidoscópio):
+                </h4>
+                <p className="text-[11px] text-slate-400">
+                  Ao derrotar o Senhor do Fragmento, o <strong className="text-cyan-200">Coração do Caleidoscópio</strong> cai no chão emitindo ondas prismáticas. Toque nele para quebrar o ciclo e alcançar a <strong className="text-cyan-300">Vitória Canônica</strong>!
                 </p>
               </div>
 
               <div>
                 <h4 className="text-amber-300 font-bold mb-0.5 flex items-center gap-1.5">
                   <Zap className="w-3.5 h-3.5" />
-                  2. Esquiva Rápida / Dash (Barra de Espaço):
+                  3. Juice & Impacto Tátil (Hit Stop & Floating Numbers):
                 </h4>
                 <p className="text-[11px] text-slate-400">
-                  Pressione <strong className="text-amber-300">Espaço</strong> para executar um Dash ultrarrápido (<strong className="text-amber-200">650 px/s</strong> por 150ms). Durante o Dash, você recebe invulnerabilidade (<strong className="text-amber-200">I-frames</strong>) e atravessa perigos com rastro de luz. Cooldown de 1.0s.
+                  Micro-pausa cinemática de <strong className="text-amber-200">40ms (Hit Stop)</strong> em cada acerto, números de dano flutuantes em arco e tremor de tela proporcional ao impacto.
                 </p>
               </div>
 
               <div>
-                <h4 className="text-rose-400 font-bold mb-0.5 flex items-center gap-1.5">
-                  <Skull className="w-3.5 h-3.5" />
-                  3. Inimigos (Aberrações Temporais):
-                </h4>
-                <p className="text-[11px] text-slate-400">
-                  30 Aberrações carmesins patrulham fora da zona segura inicial. Ao se aproximar a menos de <strong className="text-rose-300">300px</strong>, elas entram em modo de perseguição agressiva com IA física deslizante.
-                </p>
-              </div>
-
-              <div>
-                <h4 className="text-cyan-300 font-bold mb-0.5 flex items-center gap-1.5">
+                <h4 className="text-emerald-300 font-bold mb-0.5 flex items-center gap-1.5">
                   <Shield className="w-3.5 h-3.5" />
-                  4. Vitalidade (HP) & A Morte Canônica:
+                  4. Áudio Procedural 100% Web Audio API:
                 </h4>
                 <p className="text-[11px] text-slate-400">
-                  Você possui <strong className="text-emerald-300">100 HP</strong>. Ao ser tocado por um inimigo, perde 20 HP, sofre recuo e fica invulnerável por 0.5s. Se o HP chegar a <strong className="text-rose-400">&le; 0</strong>, não há Game Over: a <strong className="text-cyan-300">Tempestade de Vidro (Ruptura)</strong> é imediatamente acionada, você renasce no novo ciclo, preservando as âncoras e o progresso narrativo!
+                  Osciladores senoidais, ruído branco filtrado para Dash, chiado cortante para ataques e sinos sagrados pentatônicos para a vitória — tudo gerado em tempo real sem arquivos externos!
                 </p>
               </div>
             </div>
 
             <button
               onClick={() => setShowHelp(false)}
-              className="mt-4 w-full rounded-xl bg-rose-500/20 border border-rose-400/40 py-2.5 text-xs font-mono text-rose-200 hover:bg-rose-500/30 transition cursor-pointer"
+              className="mt-4 w-full rounded-xl bg-cyan-500/20 border border-cyan-400/40 py-2.5 text-xs font-mono text-cyan-200 hover:bg-cyan-500/30 transition cursor-pointer"
             >
               Entendido
             </button>

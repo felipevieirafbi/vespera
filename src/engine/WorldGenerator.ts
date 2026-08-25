@@ -1,4 +1,4 @@
-import { WorldObstacle, BiomeType, RealityAnchor, NPC, Enemy } from '../types/game';
+import { WorldObstacle, BiomeType, RealityAnchor, NPC, Enemy, BossEnemy } from '../types/game';
 
 interface BiomeZone {
   type: BiomeType;
@@ -13,6 +13,38 @@ interface BiomeZone {
 }
 
 export class WorldGenerator {
+  /**
+   * Generates exactly ONE Boss (O Senhor do Fragmento) per cycle, positioned far from the world center (>1300px)
+   */
+  public static generateBoss(existingAnchors: RealityAnchor[] = []): BossEnemy {
+    // Choose an angle in a far sector of the world
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 1350 + Math.random() * 350; // 1350px - 1700px away from (0,0)
+    const x = Math.round(Math.cos(angle) * dist);
+    const y = Math.round(Math.sin(angle) * dist);
+
+    return {
+      id: 9999,
+      x,
+      y,
+      size: 56, // Large imposing geometric boss
+      speed: 95, // Heavy, deliberate stalking speed
+      hp: 500, // Boss total HP
+      maxHp: 500,
+      color: '#3b0764', // Deep abyssal violet
+      borderColor: '#d946ef', // Neon magenta border
+      glowColor: '#f43f5e', // Pulsing crimson glow
+      aggroRadius: 650, // Large detection aura
+      isAggro: false,
+      vx: 0,
+      vy: 0,
+      facingAngle: angle + Math.PI,
+      shootTimer: 0,
+      ringRotation: 0,
+      isDefeated: false,
+    };
+  }
+
   /**
    * Generates ~30 Aberration enemies scattered across the world, outside the safe central area (>350px)
    */

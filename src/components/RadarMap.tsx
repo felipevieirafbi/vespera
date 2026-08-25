@@ -1,5 +1,5 @@
 import React from 'react';
-import { WorldObstacle, RealityAnchor, NPC, Enemy } from '../types/game';
+import { WorldObstacle, RealityAnchor, NPC, Enemy, BossEnemy, VictoryItem } from '../types/game';
 
 interface RadarMapProps {
   playerX: number;
@@ -8,6 +8,8 @@ interface RadarMapProps {
   anchors?: RealityAnchor[];
   npcs?: NPC[];
   enemies?: Enemy[];
+  boss?: BossEnemy | null;
+  victoryItem?: VictoryItem | null;
   worldBounds: { minX: number; maxX: number; minY: number; maxY: number };
 }
 
@@ -18,6 +20,8 @@ export const RadarMap: React.FC<RadarMapProps> = ({
   anchors = [],
   npcs = [],
   enemies = [],
+  boss = null,
+  victoryItem = null,
   worldBounds,
 }) => {
   const mapSize = 140;
@@ -43,7 +47,7 @@ export const RadarMap: React.FC<RadarMapProps> = ({
   return (
     <div
       id="radar-map-container"
-      className="relative rounded-lg border border-cyan-500/30 bg-slate-950/85 p-2.5 backdrop-blur-md shadow-xl shadow-cyan-950/20"
+      className="relative rounded-lg border border-cyan-500/30 bg-slate-950/85 p-2.5 backdrop-blur-md shadow-xl shadow-cyan-950/20 select-none"
     >
       <div className="flex items-center justify-between pb-1.5 text-[10px] font-mono uppercase tracking-wider text-cyan-400">
         <span>Radar de Biomas</span>
@@ -125,7 +129,7 @@ export const RadarMap: React.FC<RadarMapProps> = ({
           );
         })}
 
-        {/* Phase 6: Living Enemies (Aberrações) on Radar (Aggressive Crimson) */}
+        {/* Phase 6: Living Enemies (Aberrações) on Radar (Crimson) */}
         {enemies.map((enemy) => {
           const ePos = toRadar(enemy.x, enemy.y);
           return (
@@ -139,6 +143,32 @@ export const RadarMap: React.FC<RadarMapProps> = ({
             />
           );
         })}
+
+        {/* Phase 7: Boss - O Senhor do Fragmento on Radar */}
+        {boss && !boss.isDefeated && (() => {
+          const bPos = toRadar(boss.x, boss.y);
+          return (
+            <div
+              key="radar-boss"
+              className="absolute w-3.5 h-3.5 -ml-[7px] -mt-[7px] rotate-45 border border-white bg-rose-600 shadow-[0_0_12px_#f43f5e] z-25 animate-pulse"
+              style={{ left: `${bPos.x}px`, top: `${bPos.y}px` }}
+              title={`CHEFÃO: O Senhor do Fragmento (${boss.hp}/${boss.maxHp} HP)`}
+            />
+          );
+        })()}
+
+        {/* Phase 7: Victory Item - Coração do Caleidoscópio on Radar */}
+        {victoryItem && victoryItem.active && (() => {
+          const vPos = toRadar(victoryItem.x, victoryItem.y);
+          return (
+            <div
+              key="radar-victory-item"
+              className="absolute w-3.5 h-3.5 -ml-[7px] -mt-[7px] rounded-full border border-white bg-cyan-300 shadow-[0_0_12px_#00FFFF] z-30 animate-bounce"
+              style={{ left: `${vPos.x}px`, top: `${vPos.y}px` }}
+              title="CORAÇÃO DO CALEIDOSCÓPIO"
+            />
+          );
+        })()}
 
         {/* Player Blip */}
         <div
@@ -162,11 +192,10 @@ export const RadarMap: React.FC<RadarMapProps> = ({
           <span>Carmesim</span>
         </div>
         <div className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rotate-45 bg-rose-500" />
-          <span className="text-rose-300">Inimigo</span>
+          <span className="w-2 h-2 rotate-45 bg-rose-600 border border-white" />
+          <span className="text-rose-300 font-bold">Chefão</span>
         </div>
       </div>
     </div>
   );
 };
-

@@ -8,6 +8,10 @@ import {
   RealityAnchor,
   NPC,
   Enemy,
+  BossEnemy,
+  BossProjectile,
+  VictoryItem,
+  FloatingDamageNumber,
   SlashAttack,
   CombatParticle,
 } from '../types/game';
@@ -15,6 +19,7 @@ import { VirtualCamera } from './Camera';
 import { InputManager } from './InputManager';
 import { WorldGenerator } from './WorldGenerator';
 import { CollisionSystem } from './CollisionSystem';
+import { AudioManager } from './AudioManager';
 
 export class GameEngine {
   private canvas: HTMLCanvasElement;
@@ -25,24 +30,31 @@ export class GameEngine {
 
   public camera: VirtualCamera;
   public inputManager: InputManager;
+  public audioManager: AudioManager;
 
   public player: Player;
   public obstacles: WorldObstacle[] = [];
   public particles: DustParticle[] = [];
   public playerTrail: PlayerTrailPoint[] = [];
 
-  // Aberration Enemies (Phase 6)
+  // Aberration Enemies & Boss (Phase 6 & 7)
   public enemies: Enemy[] = [];
+  public boss: BossEnemy | null = null;
+  public bossProjectiles: BossProjectile[] = [];
+  public victoryItem: VictoryItem | null = null;
   public activeSlash: SlashAttack | null = null;
   public combatParticles: CombatParticle[] = [];
+  public floatingDamageNumbers: FloatingDamageNumber[] = [];
   public damageVignetteAlpha: number = 0;
   public enemiesDefeatedCount: number = 0;
+  private hitStopTimer: number = 0; // 40ms micro-pause on attack hit
 
   // Living Entities (Phase 5 - NPCs)
   public npcs: NPC[] = [];
   public nearbyNPC: NPC | null = null;
   public isDialogueOpen: boolean = false;
   public onOpenDialogue?: (npc: NPC) => void;
+  public onVictory?: () => void;
 
   // Reality Anchors (Phase 4)
   public anchors: RealityAnchor[] = [];
@@ -104,6 +116,12 @@ export class GameEngine {
     attackCooldownProgress: 1.0,
     enemiesAlive: 30,
     enemiesDefeated: 0,
+    bossHp: 500,
+    bossMaxHp: 500,
+    bossAlive: true,
+    bossDistance: 9999,
+    bossAggro: false,
+    victoryItemSpawned: false,
   };
 
   private frameCount: number = 0;
@@ -114,7 +132,8 @@ export class GameEngine {
   constructor(
     canvas: HTMLCanvasElement,
     onStatsUpdate?: (stats: EngineStats) => void,
-    onOpenDialogue?: (npc: NPC) => void
+    onOpenDialogue?: (npc: NPC) => void,
+    onVictory?: () => void
   ) {
     this.canvas = canvas;
     const context = canvas.getContext('2d', { alpha: false });
@@ -124,7 +143,9 @@ export class GameEngine {
     this.ctx = context;
     this.onStatsUpdate = onStatsUpdate;
     this.onOpenDialogue = onOpenDialogue;
+    this.onVictory = onVictory;
 
+    this.audioManager = new AudioManager();
     this.camera = new VirtualCamera(0, 0);
     this.inputManager = new InputManager();
 
@@ -156,16 +177,23 @@ export class GameEngine {
       this.ruptureState = 'collapsing';
       this.setDialogueOpen(false);
       this.activeSlash = null;
+      this.audioManager.playRupture();
     }
   }
 
   public triggerDash(): void {
+    if (this.player.dashCooldown <= 0 && !this.player.isDashing && this.ruptureState === 'idle' && !this.isDialogueOpen) {
+      this.audioManager.playDash();
+    }
     this.inputManager.triggerDash();
   }
 
   public triggerAttack(customAngle?: number): void {
     if (customAngle !== undefined) {
       this.player.facingAngle = customAngle;
+    }
+    if (this.player.attackCooldown <= 0 && this.ruptureState === 'idle' && !this.isDialogueOpen) {
+      this.audioManager.playAttack();
     }
     this.inputManager.triggerAttack();
   }
@@ -177,6 +205,7 @@ export class GameEngine {
   public openDialogueForNearbyNPC(): void {
     if (this.nearbyNPC && !this.isDialogueOpen && this.ruptureState === 'idle') {
       this.isDialogueOpen = true;
+      this.audioManager.playInteraction();
       if (this.onOpenDialogue) {
         this.onOpenDialogue(this.nearbyNPC);
       }
@@ -212,28 +241,37 @@ export class GameEngine {
     this.anchors.push(newAnchor);
     this.stats.prismsLeft = this.availablePrisms;
     this.stats.anchorsCount = this.anchors.length;
+    this.audioManager.playInteraction();
     return true;
   }
 
   /**
-   * Initializes 300 procedural cluster obstacles, 3 Living NPCs and 30 Aberration enemies
+   * Initializes 300 procedural cluster obstacles, 3 Living NPCs, 30 Aberration enemies and 1 Boss
    */
   public initWorld(): void {
     this.obstacles = WorldGenerator.generateBiomesAndObstacles(300, this.anchors);
     this.npcs = WorldGenerator.generateNPCs(this.anchors);
     this.enemies = WorldGenerator.generateEnemies(30, this.anchors);
+    this.boss = WorldGenerator.generateBoss(this.anchors);
+    this.bossProjectiles = [];
+    this.victoryItem = null;
+    this.floatingDamageNumbers = [];
     this.stats.totalObstacles = this.obstacles.length;
     this.stats.enemiesAlive = this.enemies.length;
+    this.stats.bossHp = this.boss.hp;
+    this.stats.bossMaxHp = this.boss.maxHp;
+    this.stats.bossAlive = true;
+    this.stats.victoryItemSpawned = false;
   }
 
   /**
-   * Spawns radiant crimson explosion particles when an enemy is slain
+   * Spawns radiant crimson explosion particles when an enemy or boss is damaged/slain
    */
-  public spawnCrimsonExplosion(x: number, y: number): void {
-    const colors = ['#f43f5e', '#fb7185', '#e11d48', '#ffffff', '#fda4af', '#9f1239'];
-    for (let i = 0; i < 18; i++) {
+  public spawnCrimsonExplosion(x: number, y: number, count: number = 18): void {
+    const colors = ['#f43f5e', '#fb7185', '#e11d48', '#ffffff', '#fda4af', '#9f1239', '#d946ef'];
+    for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = Math.random() * 260 + 80;
+      const speed = Math.random() * 280 + 80;
       this.combatParticles.push({
         x,
         y,
@@ -243,9 +281,27 @@ export class GameEngine {
         alpha: 1.0,
         size: Math.random() * 4 + 1.5,
         life: 0,
-        maxLife: Math.random() * 0.35 + 0.25, // 250 - 600ms
+        maxLife: Math.random() * 0.4 + 0.25, // 250 - 650ms
       });
     }
+  }
+
+  /**
+   * Adds a floating damage number on screen coordinates in world space
+   */
+  public addFloatingDamage(x: number, y: number, amount: number, color: string = '#f43f5e'): void {
+    this.floatingDamageNumbers.push({
+      id: Math.random(),
+      text: `-${amount}`,
+      x: x + (Math.random() - 0.5) * 16,
+      y: y - 10,
+      vy: -40,
+      color,
+      alpha: 1.0,
+      scale: amount >= 50 ? 1.35 : 1.0,
+      timer: 0,
+      duration: 1.0,
+    });
   }
 
   /**
@@ -333,6 +389,12 @@ export class GameEngine {
   };
 
   private update(dt: number): void {
+    // 0. Hit Stop (Micro-pausa de 40ms no impacto de combate)
+    if (this.hitStopTimer > 0) {
+      this.hitStopTimer -= dt;
+      return; // Freeze physical calculations during micro-pause to convey colossal impact weight
+    }
+
     // Rupture Trigger (Key R)
     if ((this.inputManager.isKeyPressed('KeyR') || this.inputManager.isKeyPressed('r')) && this.ruptureState === 'idle') {
       this.forceRupture();
@@ -367,6 +429,8 @@ export class GameEngine {
       this.player.invulnerabilityTimer = 0;
       this.activeSlash = null;
       this.combatParticles = [];
+      this.floatingDamageNumbers = [];
+      this.bossProjectiles = [];
       this.damageVignetteAlpha = 0;
 
       // ==========================================================
@@ -394,10 +458,16 @@ export class GameEngine {
       this.stats.totalObstacles = this.obstacles.length;
       this.stats.preservedObstaclesCount = this.preservedObstaclesCount;
 
-      // FASE 5 & 6: Re-spawn de NPCs e Aberrações em novas posições aleatórias
+      // FASE 5, 6 & 7: Re-spawn de NPCs, Aberrações e Boss em novas posições aleatórias
       this.npcs = WorldGenerator.generateNPCs(this.anchors);
       this.enemies = WorldGenerator.generateEnemies(30, this.anchors);
+      this.boss = WorldGenerator.generateBoss(this.anchors);
+      this.victoryItem = null;
       this.stats.enemiesAlive = this.enemies.length;
+      this.stats.bossHp = this.boss.hp;
+      this.stats.bossMaxHp = this.boss.maxHp;
+      this.stats.bossAlive = true;
+      this.stats.victoryItemSpawned = false;
 
       this.ruptureState = 'awakening';
     } else if (this.ruptureState === 'awakening') {
@@ -431,6 +501,7 @@ export class GameEngine {
       this.player.isDashing = true;
       this.player.dashTimer = 0.15; // 150ms duration
       this.player.dashCooldown = 1.0; // 1.0s cooldown
+      this.audioManager.playDash();
     }
 
     if (this.player.isDashing) {
@@ -441,7 +512,7 @@ export class GameEngine {
     }
 
     // ==========================================================
-    // FASE 6: AÇÃO DE ATAQUE (A LÂMINA - LEFT CLICK / MOUSE)
+    // FASE 6 & 7: AÇÃO DE ATAQUE & HIT STOP (A LÂMINA)
     // ==========================================================
     const wantsAttack = this.inputManager.consumeAttack();
     if (
@@ -462,6 +533,7 @@ export class GameEngine {
 
       this.player.facingAngle = attackAngle;
       this.player.attackCooldown = 0.3; // 300ms cooldown
+      this.audioManager.playAttack();
 
       this.activeSlash = {
         active: true,
@@ -474,9 +546,45 @@ export class GameEngine {
         duration: 0.15, // 150ms
       };
 
-      // Slash Hitbox Detection against Enemies
+      // 1. Slash Hitbox Detection against Boss
+      let hitBoss = false;
+      if (this.boss && !this.boss.isDefeated) {
+        const dist = Math.hypot(this.boss.x - this.player.x, this.boss.y - this.player.y);
+        if (dist <= 80 + this.boss.size / 2) {
+          const angleToBoss = Math.atan2(this.boss.y - this.player.y, this.boss.x - this.player.x);
+          let diffAngle = angleToBoss - attackAngle;
+          while (diffAngle < -Math.PI) diffAngle += Math.PI * 2;
+          while (diffAngle > Math.PI) diffAngle -= Math.PI * 2;
+
+          if (Math.abs(diffAngle) <= (Math.PI * 0.85) / 2 + 0.35) {
+            hitBoss = true;
+            this.boss.hp = Math.max(0, this.boss.hp - 50);
+            this.hitStopTimer = 0.040; // 40ms Hit Stop micro-pause!
+            this.audioManager.playHit();
+            this.addFloatingDamage(this.boss.x, this.boss.y, 50, '#f43f5e');
+            this.spawnCrimsonExplosion(this.boss.x, this.boss.y, 24);
+            this.shakeX = (Math.random() - 0.5) * 16;
+            this.shakeY = (Math.random() - 0.5) * 16;
+
+            if (this.boss.hp <= 0) {
+              this.boss.isDefeated = true;
+              this.spawnCrimsonExplosion(this.boss.x, this.boss.y, 120);
+              this.victoryItem = {
+                active: true,
+                x: this.boss.x,
+                y: this.boss.y,
+                radius: 26,
+                pulse: 0,
+              };
+              this.audioManager.playVictory();
+            }
+          }
+        }
+      }
+
+      // 2. Slash Hitbox Detection against Normal Enemies
       const remainingEnemies: Enemy[] = [];
-      let anyEnemyKilled = false;
+      let anyEnemyHit = false;
 
       for (const enemy of this.enemies) {
         const dist = Math.hypot(enemy.x - this.player.x, enemy.y - this.player.y);
@@ -495,9 +603,12 @@ export class GameEngine {
         }
 
         if (hit) {
-          anyEnemyKilled = true;
+          anyEnemyHit = true;
           this.enemiesDefeatedCount++;
-          this.spawnCrimsonExplosion(enemy.x, enemy.y);
+          this.hitStopTimer = 0.040; // 40ms Hit Stop micro-pause!
+          this.audioManager.playHit();
+          this.addFloatingDamage(enemy.x, enemy.y, 50, '#f43f5e');
+          this.spawnCrimsonExplosion(enemy.x, enemy.y, 18);
         } else {
           remainingEnemies.push(enemy);
         }
@@ -507,10 +618,10 @@ export class GameEngine {
       this.stats.enemiesAlive = this.enemies.length;
       this.stats.enemiesDefeated = this.enemiesDefeatedCount;
 
-      if (anyEnemyKilled) {
+      if (anyEnemyHit || hitBoss) {
         // Impact hitstop camera shake
-        this.shakeX = (Math.random() - 0.5) * 8;
-        this.shakeY = (Math.random() - 0.5) * 8;
+        this.shakeX = (Math.random() - 0.5) * 10;
+        this.shakeY = (Math.random() - 0.5) * 10;
       }
     }
 
@@ -534,6 +645,14 @@ export class GameEngine {
       cp.alpha = Math.max(0, 1 - cp.life / cp.maxLife);
     }
     this.combatParticles = this.combatParticles.filter((cp) => cp.life < cp.maxLife);
+
+    // Update Floating Damage Numbers
+    for (const dn of this.floatingDamageNumbers) {
+      dn.y += dn.vy * dt;
+      dn.timer += dt;
+      dn.alpha = Math.max(0, 1 - dn.timer / dn.duration);
+    }
+    this.floatingDamageNumbers = this.floatingDamageNumbers.filter((dn) => dn.timer < dn.duration);
 
     // Check proximity to all NPCs (< 80px distance)
     let closestNPC: NPC | null = null;
@@ -607,6 +726,133 @@ export class GameEngine {
     this.stats.collidingY = collision.collidedY;
 
     // ==========================================================
+    // FASE 7: BOSS AI & CRIMSON PROJECTILES (O SENHOR DO FRAGMENTO)
+    // ==========================================================
+    if (this.ruptureState === 'idle' && this.boss && !this.boss.isDefeated) {
+      const distToPlayer = Math.hypot(this.player.x - this.boss.x, this.player.y - this.boss.y);
+      this.boss.ringRotation += dt * 1.8;
+
+      if (distToPlayer <= this.boss.aggroRadius) {
+        this.boss.isAggro = true;
+        const dirX = (this.player.x - this.boss.x) / (distToPlayer || 1);
+        const dirY = (this.player.y - this.boss.y) / (distToPlayer || 1);
+        this.boss.vx = dirX * this.boss.speed;
+        this.boss.vy = dirY * this.boss.speed;
+        this.boss.facingAngle = Math.atan2(dirY, dirX);
+
+        // Boss Shoot Timer: 3 Spread Projectiles every 2.0s
+        this.boss.shootTimer += dt;
+        if (this.boss.shootTimer >= 2.0) {
+          this.boss.shootTimer = 0;
+          this.audioManager.playBossShoot();
+          const baseAngle = Math.atan2(this.player.y - this.boss.y, this.player.x - this.boss.x);
+          const spreadAngles = [baseAngle - 0.28, baseAngle, baseAngle + 0.28];
+          const projSpeed = 220;
+
+          for (const angle of spreadAngles) {
+            this.bossProjectiles.push({
+              id: Math.random(),
+              x: this.boss.x,
+              y: this.boss.y,
+              vx: Math.cos(angle) * projSpeed,
+              vy: Math.sin(angle) * projSpeed,
+              radius: 7,
+              color: '#f43f5e',
+              life: 0,
+              maxLife: 4.0,
+            });
+          }
+        }
+      } else {
+        this.boss.isAggro = false;
+        this.boss.vx = 0;
+        this.boss.vy = 0;
+      }
+
+      // Move Boss with sliding collision
+      const bCollision = CollisionSystem.resolveEntityMovement(
+        this.boss,
+        dt,
+        this.obstacles,
+        this.config.worldBounds
+      );
+      this.boss.x = bCollision.x;
+      this.boss.y = bCollision.y;
+
+      // Contact physical collision with Boss (25 dmg)
+      const contactDist = Math.hypot(this.player.x - this.boss.x, this.player.y - this.boss.y);
+      const contactRadius = (this.player.size + this.boss.size) / 2;
+
+      if (contactDist < contactRadius) {
+        if (!this.player.isDashing && this.player.invulnerabilityTimer <= 0) {
+          this.player.hp = Math.max(0, this.player.hp - 25);
+          this.player.invulnerabilityTimer = 0.5;
+          this.damageVignetteAlpha = 0.8;
+          this.shakeX = (Math.random() - 0.5) * 18;
+          this.shakeY = (Math.random() - 0.5) * 18;
+          this.audioManager.playHit();
+          this.addFloatingDamage(this.player.x, this.player.y, 25, '#fb7185');
+
+          const knockAngle = Math.atan2(this.player.y - this.boss.y, this.player.x - this.boss.x);
+          this.player.x += Math.cos(knockAngle) * 45;
+          this.player.y += Math.sin(knockAngle) * 45;
+
+          if (this.player.hp <= 0) {
+            this.player.hp = 0;
+            this.forceRupture();
+          }
+        }
+      }
+    }
+
+    // Update Boss Projectiles
+    const activeProjectiles: BossProjectile[] = [];
+    for (const proj of this.bossProjectiles) {
+      proj.x += proj.vx * dt;
+      proj.y += proj.vy * dt;
+      proj.life += dt;
+
+      // Check collision with Player
+      const pDist = Math.hypot(this.player.x - proj.x, this.player.y - proj.y);
+      if (pDist <= proj.radius + this.player.size / 2) {
+        if (!this.player.isDashing && this.player.invulnerabilityTimer <= 0) {
+          this.player.hp = Math.max(0, this.player.hp - 15);
+          this.player.invulnerabilityTimer = 0.5;
+          this.damageVignetteAlpha = 0.65;
+          this.shakeX = (Math.random() - 0.5) * 14;
+          this.shakeY = (Math.random() - 0.5) * 14;
+          this.audioManager.playHit();
+          this.addFloatingDamage(this.player.x, this.player.y, 15, '#fb7185');
+          this.spawnCrimsonExplosion(proj.x, proj.y, 8);
+
+          if (this.player.hp <= 0) {
+            this.player.hp = 0;
+            this.forceRupture();
+          }
+        }
+        continue; // Projectile absorbed
+      }
+
+      if (proj.life < proj.maxLife) {
+        activeProjectiles.push(proj);
+      }
+    }
+    this.bossProjectiles = activeProjectiles;
+
+    // Check Victory Item Collision (Coração do Caleidoscópio)
+    if (this.victoryItem && this.victoryItem.active) {
+      this.victoryItem.pulse += dt * 3.5;
+      const vDist = Math.hypot(this.player.x - this.victoryItem.x, this.player.y - this.victoryItem.y);
+      if (vDist <= this.victoryItem.radius + this.player.size / 2) {
+        this.victoryItem.active = false;
+        this.audioManager.playVictory();
+        if (this.onVictory) {
+          this.onVictory();
+        }
+      }
+    }
+
+    // ==========================================================
     // FASE 6: ENEMY AI (AGGRO, PERSEGUIÇÃO & COLISÃO COM JOGADOR)
     // ==========================================================
     if (this.ruptureState === 'idle') {
@@ -650,6 +896,8 @@ export class GameEngine {
             this.damageVignetteAlpha = 0.7; // Red Screen Flash
             this.shakeX = (Math.random() - 0.5) * 16;
             this.shakeY = (Math.random() - 0.5) * 16;
+            this.audioManager.playHit();
+            this.addFloatingDamage(this.player.x, this.player.y, 20, '#fb7185');
 
             // Knockback repulsion away from enemy
             const knockAngle = Math.atan2(this.player.y - enemy.y, this.player.x - enemy.x);
@@ -725,6 +973,12 @@ export class GameEngine {
     this.stats.attackCooldownProgress = Math.max(0, Math.min(1, 1 - this.player.attackCooldown / 0.3));
     this.stats.enemiesAlive = this.enemies.length;
     this.stats.enemiesDefeated = this.enemiesDefeatedCount;
+    this.stats.bossHp = this.boss ? this.boss.hp : 0;
+    this.stats.bossMaxHp = this.boss ? this.boss.maxHp : 500;
+    this.stats.bossAlive = this.boss ? !this.boss.isDefeated : false;
+    this.stats.bossDistance = this.boss ? Math.round(Math.hypot(this.player.x - this.boss.x, this.player.y - this.boss.y)) : 9999;
+    this.stats.bossAggro = this.boss ? this.boss.isAggro : false;
+    this.stats.victoryItemSpawned = this.victoryItem ? this.victoryItem.active : false;
 
     if (this.onStatsUpdate) {
       this.onStatsUpdate({ ...this.stats });
@@ -778,8 +1032,20 @@ export class GameEngine {
     // 5.8 Aberration Enemies (Phase 6)
     this.renderEnemies(ctx);
 
+    // 5.85 Boss: O Senhor do Fragmento (Phase 7)
+    this.renderBoss(ctx);
+
+    // 5.87 Boss Projectiles (Phase 7)
+    this.renderBossProjectiles(ctx);
+
+    // 5.88 Victory Item: Coração do Caleidoscópio (Phase 7)
+    this.renderVictoryItem(ctx);
+
     // 5.9 Combat Explosion Particles
     this.renderCombatParticles(ctx);
+
+    // 5.95 Floating Damage Numbers (Phase 7 Juice)
+    this.renderFloatingDamageNumbers(ctx);
 
     // 6. Foreground Parallax Dust
     if (this.config.enableParticles) {
@@ -1420,6 +1686,248 @@ export class GameEngine {
     ctx.fillRect(0, 0, width, height);
   }
 
+  /**
+   * Renders the Boss (Phase 7 - O Senhor do Fragmento):
+   * Giant 64px menacing geometric shape with rotating outer crimson obsidian rings,
+   * pulsating glowing core, and floating boss health indicator
+   */
+  private renderBoss(ctx: CanvasRenderingContext2D): void {
+    const boss = this.boss;
+    if (!boss || boss.isDefeated) return;
+
+    if (!this.camera.isVisible(boss.x - 120, boss.y - 120, 240, 240, 100)) {
+      return;
+    }
+
+    ctx.save();
+
+    // 1. Aggro Pulsing Danger Aura Ring
+    if (boss.isAggro) {
+      ctx.strokeStyle = 'rgba(244, 63, 94, 0.45)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      ctx.arc(boss.x, boss.y, 80 + Math.sin(Date.now() / 150) * 8, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // 2. Rotating Outer Crimson Obsidian Shards / Rings
+    const ringRadius = 46;
+    const ringCount = 6;
+    ctx.save();
+    ctx.translate(boss.x, boss.y);
+    ctx.rotate(boss.ringRotation);
+
+    for (let i = 0; i < ringCount; i++) {
+      const angle = (i * Math.PI * 2) / ringCount;
+      const rx = Math.cos(angle) * ringRadius;
+      const ry = Math.sin(angle) * ringRadius;
+
+      ctx.fillStyle = '#f43f5e';
+      if (this.config.enableGlow) {
+        ctx.shadowColor = '#e11d48';
+        ctx.shadowBlur = 18;
+      }
+      ctx.beginPath();
+      ctx.arc(rx, ry, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Connector crystal line
+      ctx.strokeStyle = 'rgba(244, 63, 94, 0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(rx, ry);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // 3. Boss Main Body: Large Hexagonal / Octagonal Crimson Core
+    if (this.config.enableGlow) {
+      ctx.shadowColor = boss.isAggro ? '#f43f5e' : '#be123c';
+      ctx.shadowBlur = boss.isAggro ? 34 : 22;
+    }
+
+    const half = boss.size / 2; // 32
+    ctx.fillStyle = boss.isAggro ? '#4c0519' : boss.color;
+    ctx.beginPath();
+    ctx.moveTo(boss.x, boss.y - half);
+    ctx.lineTo(boss.x + half * 0.85, boss.y - half * 0.5);
+    ctx.lineTo(boss.x + half, boss.y);
+    ctx.lineTo(boss.x + half * 0.85, boss.y + half * 0.5);
+    ctx.lineTo(boss.x, boss.y + half);
+    ctx.lineTo(boss.x - half * 0.85, boss.y + half * 0.5);
+    ctx.lineTo(boss.x - half, boss.y);
+    ctx.lineTo(boss.x - half * 0.85, boss.y - half * 0.5);
+    ctx.closePath();
+    ctx.fill();
+
+    // Sharp glowing border
+    ctx.strokeStyle = '#fda4af';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Inner pure energy diamond eye
+    ctx.fillStyle = '#ffffff';
+    const coreSize = 14 + Math.sin(Date.now() / 120) * 2;
+    ctx.fillRect(boss.x - coreSize / 2, boss.y - coreSize / 2, coreSize, coreSize);
+
+    ctx.restore();
+
+    // 4. In-World Boss Title & Health Bar above head
+    ctx.save();
+    const barWidth = 90;
+    const barHeight = 8;
+    const barX = boss.x - barWidth / 2;
+    const barY = boss.y - half - 24;
+
+    // Boss Name
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fda4af';
+    ctx.fillText('O SENHOR DO FRAGMENTO', boss.x, barY - 5);
+
+    // Background bar
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.fillRect(barX, barY, barWidth, barHeight);
+    ctx.strokeStyle = 'rgba(244, 63, 94, 0.6)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+    // Filled Health Bar
+    const hpRatio = Math.max(0, Math.min(1, boss.hp / boss.maxHp));
+    ctx.fillStyle = '#f43f5e';
+    ctx.fillRect(barX + 1, barY + 1, (barWidth - 2) * hpRatio, barHeight - 2);
+
+    ctx.restore();
+  }
+
+  /**
+   * Renders Boss Crimson Energy Projectiles
+   */
+  private renderBossProjectiles(ctx: CanvasRenderingContext2D): void {
+    if (this.bossProjectiles.length === 0) return;
+
+    for (const proj of this.bossProjectiles) {
+      if (!this.camera.isVisible(proj.x - 20, proj.y - 20, 40, 40, 50)) {
+        continue;
+      }
+
+      ctx.save();
+      if (this.config.enableGlow) {
+        ctx.shadowColor = '#f43f5e';
+        ctx.shadowBlur = 16;
+      }
+
+      // Outer Crimson Glow
+      ctx.fillStyle = proj.color;
+      ctx.beginPath();
+      ctx.arc(proj.x, proj.y, proj.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // White Center Spark
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(proj.x, proj.y, proj.radius * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+  }
+
+  /**
+   * Renders Sacred Victory Item: Coração do Caleidoscópio (Phase 7)
+   */
+  private renderVictoryItem(ctx: CanvasRenderingContext2D): void {
+    const item = this.victoryItem;
+    if (!item || !item.active) return;
+
+    if (!this.camera.isVisible(item.x - 80, item.y - 80, 160, 160, 80)) {
+      return;
+    }
+
+    ctx.save();
+
+    // Multi-color expanding pulse waves
+    const pulseScale = 1.0 + Math.sin(item.pulse) * 0.2;
+    const colors = ['#00FFFF', '#d946ef', '#f59e0b', '#10b981', '#ffffff'];
+    const activeColor = colors[Math.floor(Date.now() / 200) % colors.length];
+
+    if (this.config.enableGlow) {
+      ctx.shadowColor = activeColor;
+      ctx.shadowBlur = 32;
+    }
+
+    // Outer sacred beacon aura
+    ctx.strokeStyle = `rgba(255, 255, 255, 0.7)`;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.arc(item.x, item.y, item.radius * 1.8 * pulseScale, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Diamond Kaleidoscope Crystal
+    const s = item.radius * pulseScale;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(item.x, item.y - s);
+    ctx.lineTo(item.x + s, item.y);
+    ctx.lineTo(item.x, item.y + s);
+    ctx.lineTo(item.x - s, item.y);
+    ctx.closePath();
+    ctx.fill();
+
+    // Prismatic Border
+    ctx.strokeStyle = activeColor;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Floating Interaction Label
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('✦ CORAÇÃO DO CALEIDOSCÓPIO ✦', item.x, item.y - s - 12);
+    ctx.font = '10px monospace';
+    ctx.fillStyle = '#67e8f9';
+    ctx.fillText('(Toque para Quebrar o Ciclo)', item.x, item.y - s - 1);
+
+    ctx.restore();
+  }
+
+  /**
+   * Renders Floating Damage Numbers in World-Space (Phase 7 Juice)
+   */
+  private renderFloatingDamageNumbers(ctx: CanvasRenderingContext2D): void {
+    if (this.floatingDamageNumbers.length === 0) return;
+
+    for (const dn of this.floatingDamageNumbers) {
+      if (!this.camera.isVisible(dn.x - 30, dn.y - 30, 60, 60, 50)) {
+        continue;
+      }
+
+      ctx.save();
+      ctx.globalAlpha = dn.alpha;
+      ctx.font = `bold ${Math.round(16 * dn.scale)}px monospace`;
+      ctx.textAlign = 'center';
+
+      // Drop shadow outline for crisp legibility
+      ctx.fillStyle = '#050510';
+      ctx.fillText(dn.text, dn.x + 1.5, dn.y + 1.5);
+
+      // Neon Foreground
+      ctx.fillStyle = dn.color;
+      if (this.config.enableGlow) {
+        ctx.shadowColor = dn.color;
+        ctx.shadowBlur = 12;
+      }
+      ctx.fillText(dn.text, dn.x, dn.y);
+
+      ctx.restore();
+    }
+  }
+
   public resetPlayerPosition(): void {
     this.player.x = 0;
     this.player.y = 0;
@@ -1450,5 +1958,9 @@ export class GameEngine {
 
   public getZoom(): number {
     return this.camera.zoom;
+  }
+
+  public getStats(): EngineStats {
+    return { ...this.stats };
   }
 }

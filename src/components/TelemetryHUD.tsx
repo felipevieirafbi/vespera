@@ -62,10 +62,55 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
             <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
             CICLO DE REALIDADE: <span className="text-white text-sm ml-0.5">{stats.currentCycle}</span>
           </h1>
-          <span className="text-[10px] font-mono text-rose-300 bg-rose-950/80 border border-rose-500/50 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(244,63,94,0.3)]">
-            FASE 6: A LÂMINA
+          <span className="text-[10px] font-mono text-cyan-300 bg-cyan-950/80 border border-cyan-500/50 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(6,182,212,0.3)] font-bold">
+            FASE 7: O ENCANTO FINAL
           </span>
         </div>
+
+        {/* Phase 7: BOSS HEALTH & RADAR TRACKER */}
+        {stats.bossAlive && (
+          <div className={`rounded-lg border p-2 font-mono transition-all ${
+            stats.bossAggro
+              ? 'border-rose-500 bg-rose-950/80 shadow-[0_0_15px_rgba(244,63,94,0.35)]'
+              : 'border-rose-900/80 bg-slate-900/90'
+          }`}>
+            <div className="flex items-center justify-between text-[11px] mb-1">
+              <div className="flex items-center gap-1.5">
+                <Skull className={`w-3.5 h-3.5 ${stats.bossAggro ? 'text-rose-400 animate-bounce' : 'text-rose-500'}`} />
+                <span className="font-bold text-rose-300">O SENHOR DO FRAGMENTO</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] text-slate-400 font-mono">
+                  {stats.bossDistance}u dist
+                </span>
+                <span className="font-bold text-xs text-rose-200">
+                  {stats.bossHp} <span className="text-slate-500 font-normal">/ {stats.bossMaxHp}</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Boss HP Bar */}
+            <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-950 border border-rose-900">
+              <div
+                className="h-full bg-gradient-to-r from-rose-600 via-rose-500 to-rose-400 shadow-[0_0_10px_#f43f5e] transition-all duration-150"
+                style={{ width: `${Math.max(0, Math.min(100, ((stats.bossHp ?? 0) / (stats.bossMaxHp ?? 500)) * 100))}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Phase 7: Sacred Victory Item Beacon Alert */}
+        {stats.victoryItemSpawned && (
+          <div className="rounded-lg border border-cyan-400 bg-cyan-950/90 p-2 font-mono text-[11px] text-cyan-200 shadow-[0_0_20px_rgba(0,255,255,0.4)] animate-pulse flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-cyan-300 animate-spin" />
+              <span className="font-bold">✦ CORAÇÃO DO CALEIDOSCÓPIO SPAWNOU!</span>
+            </div>
+            <span className="text-[10px] bg-cyan-400 text-slate-950 font-bold px-2 py-0.5 rounded">
+              COLETE-O!
+            </span>
+          </div>
+        )}
 
         {/* Phase 6: NEON PLAYER HEALTH BAR */}
         <div className="rounded-lg border border-slate-800 bg-slate-900/90 p-2 font-mono">

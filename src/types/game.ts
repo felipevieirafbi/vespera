@@ -1,4 +1,5 @@
 export type BiomeType = 'quartz_forest' | 'chrono_ruins' | 'crimson_desert';
+export type GameState = 'MENU' | 'PLAYING' | 'VICTORY';
 
 export interface Vector2D {
   x: number;
@@ -69,6 +70,64 @@ export interface Enemy {
   vx: number;
   vy: number;
   facingAngle: number;
+}
+
+// Phase 7: Boss - O Senhor do Fragmento
+export interface BossEnemy {
+  id: number;
+  x: number;
+  y: number;
+  size: number; // 52px
+  speed: number; // 95 px/s
+  hp: number; // 500
+  maxHp: number; // 500
+  color: string; // '#4c0519'
+  borderColor: string; // '#f43f5e'
+  glowColor: string; // '#e11d48'
+  aggroRadius: number; // 650px
+  isAggro: boolean;
+  vx: number;
+  vy: number;
+  facingAngle: number;
+  shootTimer: number; // Fires every 2.0s
+  ringRotation: number;
+  isDefeated: boolean;
+}
+
+// Phase 7: Boss Crimson Spread Projectiles
+export interface BossProjectile {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number; // 7px
+  color: string;
+  life: number;
+  maxLife: number; // 4.0s
+}
+
+// Phase 7: Victory Item - Coração do Caleidoscópio
+export interface VictoryItem {
+  active: boolean;
+  x: number;
+  y: number;
+  radius: number; // 24px
+  pulse: number;
+}
+
+// Phase 7: Floating Damage Numbers (Juice)
+export interface FloatingDamageNumber {
+  id: number;
+  text: string;
+  x: number;
+  y: number;
+  vy: number;
+  color: string;
+  alpha: number;
+  scale: number;
+  timer: number;
+  duration: number; // 1.0s
 }
 
 export interface SlashAttack {
@@ -150,6 +209,13 @@ export interface EngineStats {
   attackCooldownProgress: number; // 0 to 1 (1 = ready)
   enemiesAlive: number;
   enemiesDefeated: number;
+  // Phase 7 Boss Stats
+  bossHp: number;
+  bossMaxHp: number;
+  bossAlive: boolean;
+  bossDistance: number;
+  bossAggro: boolean;
+  victoryItemSpawned: boolean;
 }
 
 export interface EngineConfig {
