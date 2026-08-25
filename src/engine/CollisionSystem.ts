@@ -1,0 +1,145 @@
+import { Player, WorldObstacle } from '../types/game';
+
+export interface CollisionResult {
+  x: number;
+  y: number;
+  collidedX: boolean;
+  collidedY: boolean;
+  hitObstacle?: WorldObstacle;
+}
+
+export class CollisionSystem {
+  /**
+   * Performs separate X and Y Axis-Aligned Bounding Box (AABB) continuous resolution.
+   * This guarantees frictionless diagonal sliding when colliding with surfaces.
+   */
+  public static resolveMovement(
+    player: Player,
+    dt: number,
+    obstacles: WorldObstacle[],
+    worldBounds: { minX: number; maxX: number; minY: number; maxY: number }
+  ): CollisionResult {
+    const halfSize = player.size / 2;
+    let newX = player.x;
+    let newY = player.y;
+    let collidedX = false;
+    let collidedY = false;
+    let hitObs: WorldObstacle | undefined = undefined;
+
+    // Filter nearby obstacles only (broadphase optimization within 250px)
+    const checkRadius = 300;
+    const nearbyObstacles = obstacles.filter(
+      (obs) => Math.hypot(obs.x - player.x, obs.y - player.y) < checkRadius + Math.max(obs.width, obs.height)
+    );
+
+    // ==========================================
+    // 1. RESOLVE X-AXIS MOVEMENT
+    // ==========================================
+    if (player.vx !== 0) {
+      const targetX = player.x + player.vx * dt;
+      let safeX = targetX;
+
+      // Check map world boundary in X
+      if (safeX - halfSize < worldBounds.minX) {
+        safeX = worldBounds.minX + halfSize;
+        collidedX = true;
+      } else if (safeX + halfSize > worldBounds.maxX) {
+        safeX = worldBounds.maxX - halfSize;
+        collidedX = true;
+      }
+
+      // Check AABB collisions against nearby obstacles
+      const pYmin = player.y - halfSize + 0.1;
+      const pYmax = player.y + halfSize - 0.1;
+
+      for (const obs of nearbyObstacles) {
+        const obsXmin = obs.x - obs.width / 2;
+        const obsXmax = obs.x + obs.width / 2;
+        const obsYmin = obs.y - obs.height / 2;
+        const obsYmax = obs.y + obs.height / 2;
+
+        // Check vertical overlap with current player Y
+        if (pYmax > obsYmin && pYmin < obsYmax) {
+          const targetXmin = safeX - halfSize;
+          const targetXmax = safeX + halfSize;
+
+          // Check if moving to targetX causes an overlap in X
+          if (targetXmax > obsXmin && targetXmin < obsXmax) {
+            collidedX = true;
+            hitObs = obs;
+
+            // Moving Right -> snap to left edge of obstacle
+            if (player.vx > 0) {
+              safeX = Math.min(safeX, obsXmin - halfSize);
+            }
+            // Moving Left -> snap to right edge of obstacle
+            else if (player.vx < 0) {
+              safeX = Math.max(safeX, obsXmax + halfSize);
+            }
+          }
+        }
+      }
+
+      newX = safeX;
+    }
+
+    // ==========================================
+    // 2. RESOLVE Y-AXIS MOVEMENT (with new resolved X)
+    // ==========================================
+    if (player.vy !== 0) {
+      const targetY = player.y + player.vy * dt;
+      let safeY = targetY;
+
+      // Check map world boundary in Y
+      if (safeY - halfSize < worldBounds.minY) {
+        safeY = worldBounds.minY + halfSize;
+        collidedY = true;
+      } else if (safeY + halfSize > worldBounds.maxY) {
+        safeY = worldBounds.maxY - halfSize;
+        collidedY = true;
+      }
+
+      // Check AABB collisions against nearby obstacles using resolved newX
+      const pXmin = newX - halfSize + 0.1;
+      const pXmax = newX + halfSize - 0.1;
+
+      for (const obs of nearbyObstacles) {
+        const obsXmin = obs.x - obs.width / 2;
+        const obsXmax = obs.x + obs.width / 2;
+        const obsYmin = obs.y - obs.height / 2;
+        const obsYmax = obs.y + obs.height / 2;
+
+        // Check horizontal overlap with updated player X
+        if (pXmax > obsXmin && pXmin < obsXmax) {
+          const targetYmin = safeY - halfSize;
+          const targetYmax = safeY + halfSize;
+
+          // Check if moving to targetY causes an overlap in Y
+          if (targetYmax > obsYmin && targetYmin < obsYmax) {
+            collidedY = true;
+            hitObs = obs;
+
+            // Moving Down -> snap to top edge of obstacle
+            if (player.vy > 0) {
+              safeY = Math.min(safeY, obsYmin - halfSize);
+            }
+            // Moving Up -> snap to bottom edge of obstacle
+            else if (player.vy < 0) {
+              safeY = Math.max(safeY, obsYmax + halfSize);
+            }
+          }
+        }
+      }
+
+      newY = safeY;
+    }
+
+    return {
+      x: newX,
+      y: newY,
+      collidedX,
+      collidedY,
+      hitObstacle: hitObs,
+    };
+  }
+}

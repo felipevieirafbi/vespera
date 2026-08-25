@@ -1,0 +1,615 @@
+import { Player, WorldObstacle, DustParticle, PlayerTrailPoint, EngineStats, EngineConfig } from '../types/game';
+import { VirtualCamera } from './Camera';
+import { InputManager } from './InputManager';
+import { WorldGenerator } from './WorldGenerator';
+import { CollisionSystem } from './CollisionSystem';
+
+export class GameEngine {
+  private canvas: HTMLCanvasElement;
+  private ctx: CanvasRenderingContext2D;
+  private animationFrameId: number | null = null;
+  private lastTime: number = 0;
+  private isRunning: boolean = false;
+
+  public camera: VirtualCamera;
+  public inputManager: InputManager;
+
+  public player: Player;
+  public obstacles: WorldObstacle[] = [];
+  public particles: DustParticle[] = [];
+  public playerTrail: PlayerTrailPoint[] = [];
+
+  public config: EngineConfig = {
+    gridSize: 80,
+    worldBounds: {
+      minX: -2000,
+      maxX: 2000,
+      minY: -2000,
+      maxY: 2000,
+    },
+    baseSpeed: 280,
+    sprintMultiplier: 1.6,
+    enableGlow: true,
+    enableTrail: true,
+    enableParticles: true,
+    enableVignette: true,
+    cameraSmoothing: 1.0, // 1.0 = strict centered camera
+  };
+
+  private stats: EngineStats = {
+    fps: 60,
+    deltaTime: 0,
+    worldX: 0,
+    worldY: 0,
+    speed: 0,
+    isMoving: false,
+    activeKeys: [],
+    currentBiome: 'Floresta de Quartzo',
+    obstaclesInView: 0,
+    totalObstacles: 300,
+    collidingX: false,
+    collidingY: false,
+  };
+
+  private frameCount: number = 0;
+  private fpsTimer: number = 0;
+  private trailTimer: number = 0;
+  private onStatsUpdate?: (stats: EngineStats) => void;
+
+  constructor(canvas: HTMLCanvasElement, onStatsUpdate?: (stats: EngineStats) => void) {
+    this.canvas = canvas;
+    const context = canvas.getContext('2d', { alpha: false });
+    if (!context) {
+      throw new Error('Failed to obtain 2D rendering context');
+    }
+    this.ctx = context;
+    this.onStatsUpdate = onStatsUpdate;
+
+    this.camera = new VirtualCamera(0, 0);
+    this.inputManager = new InputManager();
+
+    // Player: 30x30 Glowing Cyan (#00FFFF) square at origin
+    this.player = {
+      x: 0,
+      y: 0,
+      size: 30,
+      speed: this.config.baseSpeed,
+      color: '#00FFFF',
+      vx: 0,
+      vy: 0,
+      facingAngle: 0,
+    };
+
+    this.initWorld();
+    this.initDustParticles(150);
+  }
+
+  /**
+   * Initializes 300 procedural cluster obstacles across 3 Biomes
+   */
+  public initWorld(): void {
+    this.obstacles = WorldGenerator.generateBiomesAndObstacles(300);
+    this.stats.totalObstacles = this.obstacles.length;
+  }
+
+  /**
+   * Initializes ~150 ambient magical dust particles with multi-layer 3D parallax
+   */
+  private initDustParticles(count: number = 150): void {
+    this.particles = [];
+    const colors = [
+      '#ffffff', // pure celestial white
+      '#fef08a', // luminous pale gold
+      '#fbbf24', // deep gold
+      '#67e8f9', // pale cyan
+      '#e0e7ff', // starlight violet
+    ];
+
+    for (let i = 0; i < count; i++) {
+      const baseX = Math.random() * 4400 - 2200;
+      const baseY = Math.random() * 4400 - 2200;
+      this.particles.push({
+        x: baseX,
+        y: baseY,
+        baseX,
+        baseY,
+        size: Math.random() * 2.8 + 1.2,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        alpha: Math.random() * 0.6 + 0.25,
+        vx: (Math.random() - 0.5) * 12,
+        vy: (Math.random() - 0.5) * 12,
+        parallaxDepth: Math.random() * 0.6 + 0.15, // 0.15 to 0.75 depth layers
+        pulseSpeed: Math.random() * 2 + 1,
+        pulsePhase: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+
+  public start(): void {
+    if (this.isRunning) return;
+    this.isRunning = true;
+    this.lastTime = performance.now();
+    this.fpsTimer = performance.now();
+    this.frameCount = 0;
+    this.loop(this.lastTime);
+  }
+
+  public stop(): void {
+    this.isRunning = false;
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+  }
+
+  public resize(width: number, height: number): void {
+    const dpr = window.devicePixelRatio || 1;
+    this.canvas.width = width * dpr;
+    this.canvas.height = height * dpr;
+    this.canvas.style.width = `${width}px`;
+    this.canvas.style.height = `${height}px`;
+
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.camera.resize(width, height);
+  }
+
+  private loop = (currentTime: number): void => {
+    if (!this.isRunning) return;
+
+    let dt = (currentTime - this.lastTime) / 1000;
+    this.lastTime = currentTime;
+
+    // Safety clamp dt to prevent teleportation on tab background throttles
+    if (dt > 0.1) dt = 0.1;
+
+    // FPS Meter
+    this.frameCount++;
+    if (currentTime - this.fpsTimer >= 500) {
+      this.stats.fps = Math.round((this.frameCount * 1000) / (currentTime - this.fpsTimer));
+      this.frameCount = 0;
+      this.fpsTimer = currentTime;
+    }
+
+    this.update(dt);
+    this.render();
+
+    this.animationFrameId = requestAnimationFrame(this.loop);
+  };
+
+  private update(dt: number): void {
+    const moveVector = this.inputManager.getMovementVector();
+    const isSprinting = this.inputManager.isSprinting();
+    const currentSpeed = this.player.speed * (isSprinting ? this.config.sprintMultiplier : 1.0);
+
+    // Vector-based velocity with strict diagonal normalization
+    this.player.vx = moveVector.x * currentSpeed;
+    this.player.vy = moveVector.y * currentSpeed;
+
+    const isMoving = moveVector.x !== 0 || moveVector.y !== 0;
+
+    if (isMoving) {
+      this.player.facingAngle = Math.atan2(moveVector.y, moveVector.x);
+    }
+
+    // ==========================================================
+    // CRITICAL: AABB SLIDING COLLISION RESOLUTION (Separate X & Y)
+    // ==========================================================
+    const collision = CollisionSystem.resolveMovement(
+      this.player,
+      dt,
+      this.obstacles,
+      this.config.worldBounds
+    );
+
+    this.player.x = collision.x;
+    this.player.y = collision.y;
+    this.stats.collidingX = collision.collidedX;
+    this.stats.collidingY = collision.collidedY;
+
+    // Record Player Light Trail (last 12-15 positions)
+    if (this.config.enableTrail) {
+      this.trailTimer += dt;
+      if (this.trailTimer >= 0.035) { // record a ghost sample every ~35ms
+        this.trailTimer = 0;
+        this.playerTrail.unshift({
+          x: this.player.x,
+          y: this.player.y,
+          size: this.player.size,
+          alpha: 0.5,
+          angle: this.player.facingAngle,
+        });
+
+        // Limit to max 14 historical trail echoes
+        if (this.playerTrail.length > 14) {
+          this.playerTrail.pop();
+        }
+      }
+    }
+
+    // Update ambient dust particles
+    if (this.config.enableParticles) {
+      for (const p of this.particles) {
+        p.baseX += p.vx * dt;
+        p.baseY += p.vy * dt;
+        p.pulsePhase += dt * p.pulseSpeed;
+
+        // Wrap around bounds
+        if (p.baseX < this.config.worldBounds.minX - 200) p.baseX = this.config.worldBounds.maxX + 200;
+        if (p.baseX > this.config.worldBounds.maxX + 200) p.baseX = this.config.worldBounds.minX - 200;
+        if (p.baseY < this.config.worldBounds.minY - 200) p.baseY = this.config.worldBounds.maxY + 200;
+        if (p.baseY > this.config.worldBounds.maxY + 200) p.baseY = this.config.worldBounds.minY - 200;
+      }
+    }
+
+    // Virtual Camera locks centered on player
+    this.camera.follow(this.player.x, this.player.y, dt);
+
+    // Current Biome determination
+    const currentBiomeInfo = WorldGenerator.getBiomeAt(this.player.x, this.player.y);
+
+    // Update telemetry state
+    this.stats.deltaTime = dt;
+    this.stats.worldX = Math.round(this.player.x);
+    this.stats.worldY = Math.round(this.player.y);
+    this.stats.speed = Math.round(Math.sqrt(this.player.vx * this.player.vx + this.player.vy * this.player.vy));
+    this.stats.isMoving = isMoving;
+    this.stats.activeKeys = this.inputManager.getActiveKeysList();
+    this.stats.currentBiome = currentBiomeInfo.name;
+
+    if (this.onStatsUpdate) {
+      this.onStatsUpdate({ ...this.stats });
+    }
+  }
+
+  private render(): void {
+    const ctx = this.ctx;
+    const width = this.camera.viewportWidth;
+    const height = this.camera.viewportHeight;
+
+    // 1. Fundo Abissal (#050510)
+    ctx.fillStyle = '#050510';
+    ctx.fillRect(0, 0, width, height);
+
+    // Apply Virtual Camera matrix
+    this.camera.applyTransform(ctx);
+
+    // 2. Infinite Subtle Grid
+    this.renderInfiniteGrid(ctx);
+
+    // 3. Neon Red Map Boundaries
+    this.renderWorldBounds(ctx);
+
+    // 4. Parallax Magical Dust Particles (Deep & Mid layers)
+    if (this.config.enableParticles) {
+      this.renderParallaxDust(ctx, 0.4);
+    }
+
+    // 5. Procedural Biome Obstacles (with strict Frustum Culling)
+    let visibleObstacles = 0;
+    for (const obs of this.obstacles) {
+      if (this.camera.isVisible(obs.x - obs.width / 2, obs.y - obs.height / 2, obs.width, obs.height, 120)) {
+        this.renderObstacle(ctx, obs);
+        visibleObstacles++;
+      }
+    }
+    this.stats.obstaclesInView = visibleObstacles;
+
+    // 6. Foreground Parallax Dust
+    if (this.config.enableParticles) {
+      this.renderParallaxDust(ctx, 1.0);
+    }
+
+    // 7. Player Light Trail (Ecos passados diminuindo de tamanho e opacidade)
+    if (this.config.enableTrail) {
+      this.renderPlayerTrail(ctx);
+    }
+
+    // 8. Player: Glowing Cyan Anomaly (#00FFFF) with Bloom
+    this.renderPlayer(ctx);
+
+    // Restore Camera context to screen-space
+    this.camera.restoreTransform(ctx);
+
+    // 9. Cinematographic Vignette (Radial Gradient at viewport edges)
+    if (this.config.enableVignette) {
+      this.renderVignette(ctx, width, height);
+    }
+  }
+
+  private renderInfiniteGrid(ctx: CanvasRenderingContext2D): void {
+    const gridSize = this.config.gridSize;
+    const bounds = this.camera.getWorldBounds(gridSize);
+
+    const startX = Math.floor(bounds.minX / gridSize) * gridSize;
+    const endX = Math.ceil(bounds.maxX / gridSize) * gridSize;
+    const startY = Math.floor(bounds.minY / gridSize) * gridSize;
+    const endY = Math.ceil(bounds.maxY / gridSize) * gridSize;
+
+    // Minor faint grid lines
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(30, 41, 59, 0.35)'; // faint slate-800
+
+    ctx.beginPath();
+    for (let x = startX; x <= endX; x += gridSize) {
+      if (x % (gridSize * 5) !== 0 && x !== 0) {
+        ctx.moveTo(x, bounds.minY);
+        ctx.lineTo(x, bounds.maxY);
+      }
+    }
+    for (let y = startY; y <= endY; y += gridSize) {
+      if (y % (gridSize * 5) !== 0 && y !== 0) {
+        ctx.moveTo(bounds.minX, y);
+        ctx.lineTo(bounds.maxX, y);
+      }
+    }
+    ctx.stroke();
+
+    // Major grid lines (every 400u)
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = 'rgba(51, 65, 85, 0.55)'; // slate-700
+
+    ctx.beginPath();
+    for (let x = startX; x <= endX; x += gridSize * 5) {
+      if (x !== 0) {
+        ctx.moveTo(x, bounds.minY);
+        ctx.lineTo(x, bounds.maxY);
+      }
+    }
+    for (let y = startY; y <= endY; y += gridSize * 5) {
+      if (y !== 0) {
+        ctx.moveTo(bounds.minX, y);
+        ctx.lineTo(bounds.maxX, y);
+      }
+    }
+    ctx.stroke();
+
+    // World Axes (X=0, Y=0) with subtle cyan gradient
+    ctx.lineWidth = 1.8;
+    ctx.strokeStyle = 'rgba(6, 182, 212, 0.6)';
+
+    ctx.beginPath();
+    if (bounds.minX <= 0 && bounds.maxX >= 0) {
+      ctx.moveTo(0, bounds.minY);
+      ctx.lineTo(0, bounds.maxY);
+    }
+    if (bounds.minY <= 0 && bounds.maxY >= 0) {
+      ctx.moveTo(bounds.minX, 0);
+      ctx.lineTo(bounds.maxX, 0);
+    }
+    ctx.stroke();
+  }
+
+  private renderWorldBounds(ctx: CanvasRenderingContext2D): void {
+    const { minX, maxX, minY, maxY } = this.config.worldBounds;
+    const width = maxX - minX;
+    const height = maxY - minY;
+
+    ctx.save();
+    // Glowing red border
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#ef4444';
+    ctx.shadowColor = '#ef4444';
+    ctx.shadowBlur = 12;
+    ctx.strokeRect(minX, minY, width, height);
+    ctx.restore();
+
+    // Danger perimeter hashes
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.7)';
+    ctx.lineWidth = 2;
+    const cornerSize = 50;
+
+    // Corner marks
+    ctx.beginPath();
+    ctx.moveTo(minX, minY + cornerSize); ctx.lineTo(minX, minY); ctx.lineTo(minX + cornerSize, minY);
+    ctx.moveTo(maxX - cornerSize, minY); ctx.lineTo(maxX, minY); ctx.lineTo(maxX, minY + cornerSize);
+    ctx.moveTo(minX, maxY - cornerSize); ctx.lineTo(minX, maxY); ctx.lineTo(minX + cornerSize, maxY);
+    ctx.moveTo(maxX - cornerSize, maxY); ctx.lineTo(maxX, maxY); ctx.lineTo(maxX, maxY - cornerSize);
+    ctx.stroke();
+
+    // Biome boundary zone tags
+    ctx.font = '11px monospace';
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.6)';
+    ctx.fillText('LIMITE DO CALEIDOSCÓPIO [-2000, -2000]', minX + 20, minY + 25);
+    ctx.fillText('LIMITE DO CALEIDOSCÓPIO [+2000, +2000]', maxX - 280, maxY - 15);
+  }
+
+  private renderObstacle(ctx: CanvasRenderingContext2D, obs: WorldObstacle): void {
+    const rx = obs.x - obs.width / 2;
+    const ry = obs.y - obs.height / 2;
+
+    // Fill base
+    ctx.fillStyle = obs.color;
+    ctx.fillRect(rx, ry, obs.width, obs.height);
+
+    // Neon crisp border
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = obs.borderColor;
+    ctx.strokeRect(rx, ry, obs.width, obs.height);
+
+    // Biome-specific internal geometric ornament
+    ctx.lineWidth = 1;
+    if (obs.biome === 'quartz_forest') {
+      // Quartz Prism facets (emerald)
+      ctx.strokeStyle = 'rgba(52, 211, 153, 0.25)';
+      ctx.beginPath();
+      ctx.moveTo(rx + obs.width / 2, ry + 4);
+      ctx.lineTo(rx + 4, ry + obs.height / 2);
+      ctx.lineTo(rx + obs.width / 2, ry + obs.height - 4);
+      ctx.lineTo(rx + obs.width - 4, ry + obs.height / 2);
+      ctx.closePath();
+      ctx.stroke();
+    } else if (obs.biome === 'chrono_ruins') {
+      // Chrono Rune Cross (violet/magenta)
+      ctx.strokeStyle = 'rgba(217, 70, 239, 0.3)';
+      ctx.beginPath();
+      ctx.moveTo(rx + obs.width / 2, ry + 4);
+      ctx.lineTo(rx + obs.width / 2, ry + obs.height - 4);
+      ctx.moveTo(rx + 4, ry + obs.height / 2);
+      ctx.lineTo(rx + obs.width - 4, ry + obs.height / 2);
+      ctx.stroke();
+    } else {
+      // Crimson Shard diagonal cuts (amber/orange)
+      ctx.strokeStyle = 'rgba(251, 146, 60, 0.3)';
+      ctx.beginPath();
+      ctx.moveTo(rx + 4, ry + 4);
+      ctx.lineTo(rx + obs.width - 4, ry + obs.height - 4);
+      ctx.moveTo(rx + obs.width - 4, ry + 4);
+      ctx.lineTo(rx + 4, ry + obs.height - 4);
+      ctx.stroke();
+    }
+  }
+
+  /**
+   * Renders ~150 Ambient Magic Dust particles with real 3D Parallax offset
+   */
+  private renderParallaxDust(ctx: CanvasRenderingContext2D, maxDepthThreshold: number): void {
+    const camX = this.camera.x;
+    const camY = this.camera.y;
+
+    for (const p of this.particles) {
+      if (maxDepthThreshold === 0.4 && p.parallaxDepth > 0.4) continue;
+      if (maxDepthThreshold === 1.0 && p.parallaxDepth <= 0.4) continue;
+
+      // Parallax mathematics: deeper particles move slower relative to camera
+      const parallaxFactor = p.parallaxDepth; // e.g. 0.2 moves with 20% camera offset
+      const renderX = p.baseX + (camX * (1 - parallaxFactor));
+      const renderY = p.baseY + (camY * (1 - parallaxFactor));
+
+      if (!this.camera.isVisible(renderX - 10, renderY - 10, 20, 20, 50)) {
+        continue;
+      }
+
+      const pulse = 0.6 + 0.4 * Math.sin(p.pulsePhase);
+      const effectiveAlpha = p.alpha * pulse * (0.4 + parallaxFactor * 0.6);
+
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = Math.max(0, Math.min(1, effectiveAlpha));
+
+      const pSize = p.size * (0.8 + parallaxFactor * 0.4);
+      // Soft diamond particle
+      ctx.fillRect(renderX - pSize / 2, renderY - pSize / 2, pSize, pSize);
+    }
+    ctx.globalAlpha = 1.0;
+  }
+
+  /**
+   * Renders light trail echoes decreasing smoothly in size and opacity
+   */
+  private renderPlayerTrail(ctx: CanvasRenderingContext2D): void {
+    const total = this.playerTrail.length;
+    if (total === 0) return;
+
+    for (let i = 0; i < total; i++) {
+      const echo = this.playerTrail[i];
+      // Progress from newest (0.0) to oldest (1.0)
+      const factor = (i + 1) / (total + 1);
+      
+      // Progressive scale down from 30px to ~10px
+      const currentSize = echo.size * (1 - factor * 0.65);
+      // Progressive fade from 0.4 to 0.02
+      const currentAlpha = 0.42 * (1 - factor);
+
+      ctx.fillStyle = `rgba(0, 255, 255, ${currentAlpha})`;
+      ctx.fillRect(
+        echo.x - currentSize / 2,
+        echo.y - currentSize / 2,
+        currentSize,
+        currentSize
+      );
+
+      // Faint central spark
+      ctx.fillStyle = `rgba(255, 255, 255, ${currentAlpha * 0.8})`;
+      const sparkSize = Math.max(2, currentSize * 0.25);
+      ctx.fillRect(echo.x - sparkSize / 2, echo.y - sparkSize / 2, sparkSize, sparkSize);
+    }
+  }
+
+  /**
+   * Renders the Player: 30x30 Glowing Cyan (#00FFFF) square with shadowBlur=15 and core
+   */
+  private renderPlayer(ctx: CanvasRenderingContext2D): void {
+    const px = this.player.x;
+    const py = this.player.y;
+    const half = this.player.size / 2;
+
+    ctx.save();
+    if (this.config.enableGlow) {
+      ctx.shadowColor = '#00FFFF';
+      ctx.shadowBlur = 15;
+    }
+
+    // Outer Neon Cyan Body (#00FFFF)
+    ctx.fillStyle = this.player.color;
+    ctx.fillRect(px - half, py - half, this.player.size, this.player.size);
+    ctx.restore();
+
+    // Inner pure crystal white core
+    ctx.fillStyle = '#FFFFFF';
+    const coreSize = 10;
+    ctx.fillRect(px - coreSize / 2, py - coreSize / 2, coreSize, coreSize);
+
+    // Directional vector indicator (facing angle)
+    const arrowDist = 20;
+    const ax = px + Math.cos(this.player.facingAngle) * arrowDist;
+    const ay = py + Math.sin(this.player.facingAngle) * arrowDist;
+
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(ax, ay);
+    ctx.stroke();
+
+    ctx.fillStyle = '#00FFFF';
+    ctx.fillRect(ax - 2, ay - 2, 4, 4);
+  }
+
+  /**
+   * Renders the Cinematographic Vignette (Radial gradient at viewport edges)
+   */
+  private renderVignette(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    const radius = Math.hypot(width, height) / 2;
+    const cx = width / 2;
+    const cy = height / 2;
+
+    const grad = ctx.createRadialGradient(cx, cy, radius * 0.42, cx, cy, radius);
+    grad.addColorStop(0, 'rgba(5, 5, 16, 0)');
+    grad.addColorStop(0.65, 'rgba(5, 5, 16, 0.45)');
+    grad.addColorStop(1, 'rgba(5, 5, 16, 0.92)');
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+  }
+
+  public resetPlayerPosition(): void {
+    this.player.x = 0;
+    this.player.y = 0;
+    this.player.vx = 0;
+    this.player.vy = 0;
+    this.camera.x = 0;
+    this.camera.y = 0;
+    this.playerTrail = [];
+  }
+
+  public teleportToBiome(biome: 'quartz_forest' | 'chrono_ruins' | 'crimson_desert'): void {
+    const targets = {
+      quartz_forest: { x: -900, y: -900 },
+      chrono_ruins: { x: 950, y: -850 },
+      crimson_desert: { x: 0, y: 950 },
+    };
+    const target = targets[biome];
+    this.player.x = target.x;
+    this.player.y = target.y;
+    this.camera.x = target.x;
+    this.camera.y = target.y;
+    this.playerTrail = [];
+  }
+
+  public setZoom(zoom: number): void {
+    this.camera.zoom = Math.max(0.25, Math.min(2.5, zoom));
+  }
+
+  public getZoom(): number {
+    return this.camera.zoom;
+  }
+}
