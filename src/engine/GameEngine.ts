@@ -535,7 +535,7 @@ export class GameEngine {
     ctx.save();
     if (this.config.enableGlow) {
       ctx.shadowColor = '#00FFFF';
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = 20;
     }
 
     // Outer Neon Cyan Body (#00FFFF)
