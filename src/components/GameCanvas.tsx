@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GameEngine } from '../engine/GameEngine';
-import { EngineStats, GameState, NPC, PlayerUpgrades } from '../types/game';
+import { EngineStats, GameState, NPC, PlayerUpgrades, BoonId, EchoAltar } from '../types/game';
 import { TelemetryHUD } from './TelemetryHUD';
 import { RadarMap } from './RadarMap';
 import { GameControlsOverlay } from './GameControlsOverlay';
 import { VirtualDPad } from './VirtualDPad';
 import { DialogueBox } from './DialogueBox';
 import { UpgradeForge } from './UpgradeForge';
-import { Info, Sparkles, Sword, Shield, Zap, Skull, Home, Flame, Compass } from 'lucide-react';
+import { BoonSelection } from './BoonSelection';
+import { Info, Sparkles, Sword, Shield, Zap, Skull, Home, Flame, Compass, Layers } from 'lucide-react';
 
 interface GameCanvasProps {
   initialGameState?: GameState;
@@ -58,6 +59,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     collidingX: false,
     collidingY: false,
     nearbyNPC: null,
+    nearbyAltar: null,
     memoryTears: 1,
     awakenedNPCsCount: 0,
     memoryDust: memoryDust,
@@ -78,6 +80,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     bossDistance: 9999,
     bossAggro: false,
     victoryItemSpawned: false,
+    activeBoons: [],
   });
 
   const [zoom, setZoom] = useState<number>(1.0);
@@ -87,6 +90,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const [enableVignette, setEnableVignette] = useState<boolean>(true);
   const [showHelp, setShowHelp] = useState<boolean>(false);
   const [isForgeOpen, setIsForgeOpen] = useState<boolean>(false);
+  const [isBoonSelectOpen, setIsBoonSelectOpen] = useState<boolean>(false);
 
   // Metaprogression & NPC dialogue state
   const [memoryTears, setMemoryTears] = useState<number>(1);
@@ -105,7 +109,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Create Game Engine with dialogue, forge, portal, death and victory callbacks
+    // Create Game Engine with dialogue, forge, boon select, portal, death and victory callbacks
     const engine = new GameEngine(
       canvas,
       initialGameState,
@@ -131,6 +135,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         // Open Soul Forge
         setIsForgeOpen(true);
       },
+      (altar) => {
+        // Open Boon Selection
+        setIsBoonSelectOpen(true);
+      },
       () => {
         // Entered Portal -> Transition to PLAYING
         if (onGameStateChange) {
@@ -139,6 +147,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       },
       () => {
         // Player Died -> Transition to SANCTUARY
+        setIsBoonSelectOpen(false);
         if (onGameStateChange) {
           onGameStateChange('SANCTUARY');
         }
@@ -184,6 +193,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
   const handleAttack = useCallback(() => {
     engineRef.current?.triggerAttack();
+  }, []);
+
+  // Boon actions
+  const handleSelectBoon = useCallback((boonId: BoonId) => {
+    if (engineRef.current) {
+      engineRef.current.applyBoon(boonId);
+    }
+    setIsBoonSelectOpen(false);
+  }, []);
+
+  const handleCloseBoonSelect = useCallback(() => {
+    if (engineRef.current) {
+      engineRef.current.closeBoonMenu();
+    }
+    setIsBoonSelectOpen(false);
   }, []);
 
   // Dialogue actions
@@ -341,13 +365,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
       {/* Top Right: Title Badge, Sanctuary Actions & Radar Map */}
       <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2.5 pointer-events-auto">
-        <div className="flex items-center gap-2 rounded-xl border border-purple-500/40 bg-slate-950/90 px-3 py-1.5 backdrop-blur-md shadow-xl shadow-purple-950/20">
-          <Sparkles className="w-4 h-4 text-purple-400 animate-spin" style={{ animationDuration: '8s' }} />
+        <div className="flex items-center gap-2 rounded-xl border border-cyan-500/40 bg-slate-950/90 px-3 py-1.5 backdrop-blur-md shadow-xl shadow-cyan-950/20">
+          <Sparkles className="w-4 h-4 text-cyan-400 animate-spin" style={{ animationDuration: '8s' }} />
           <div className="text-right">
-            <h1 className="text-xs font-bold tracking-wider text-purple-300 font-mono">
-              VÉSPERA: FASE 8
+            <h1 className="text-xs font-bold tracking-wider text-cyan-300 font-mono">
+              VÉSPERA: FASE 9
             </h1>
-            <p className="text-[9.5px] text-slate-400 font-mono">O Santuário do Vazio e a Forja da Alma</p>
+            <p className="text-[9.5px] text-slate-400 font-mono">A Sinergia • Bênçãos & Novas Ameaças</p>
           </div>
 
           {/* Quick button to open Soul Forge if in Sanctuary */}
@@ -374,7 +398,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           <button
             onClick={() => setShowHelp(!showHelp)}
             className="p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-cyan-300 transition"
-            title="Especificações da Fase 8"
+            title="Especificações da Fase 9"
           >
             <Info className="w-3.5 h-3.5" />
           </button>
@@ -390,6 +414,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             enemies={engineRef.current.enemies}
             boss={engineRef.current.boss}
             victoryItem={engineRef.current.victoryItem}
+            altars={engineRef.current.altars}
             worldBounds={engineRef.current.config.worldBounds}
           />
         )}
@@ -434,6 +459,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         </div>
       </div>
 
+      {/* Boon Selection Modal (Phase 9) */}
+      {isBoonSelectOpen && (
+        <BoonSelection
+          activeBoons={stats.activeBoons || []}
+          onSelectBoon={handleSelectBoon}
+          onClose={handleCloseBoonSelect}
+        />
+      )}
+
       {/* Upgrade Forge Overlay (Phase 8) */}
       {isForgeOpen && (
         <UpgradeForge
@@ -459,10 +493,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       {/* Help Modal */}
       {showHelp && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
-          <div className="max-w-lg w-full rounded-2xl border border-purple-500/40 bg-slate-950 p-5 shadow-2xl text-slate-200">
+          <div className="max-w-lg w-full rounded-2xl border border-cyan-500/40 bg-slate-950 p-5 shadow-2xl text-slate-200">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
-              <h3 className="text-sm font-bold text-purple-300 font-mono uppercase tracking-wider">
-                VÉSPERA: Especificações da Fase 8 (A Forja da Alma)
+              <h3 className="text-sm font-bold text-cyan-300 font-mono uppercase tracking-wider">
+                VÉSPERA: Especificações da Fase 9 (A Sinergia)
               </h3>
               <button
                 onClick={() => setShowHelp(false)}
@@ -474,52 +508,47 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
             <div className="space-y-3 text-xs font-mono text-slate-300 leading-relaxed max-h-[70vh] overflow-y-auto pr-1">
               <div>
-                <h4 className="text-indigo-400 font-bold mb-0.5 flex items-center gap-1.5">
-                  <Compass className="w-3.5 h-3.5" />
-                  1. O Santuário do Vazio (Hub World Permanente):
+                <h4 className="text-cyan-400 font-bold mb-0.5 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  1. Altares de Eco & Bênçãos Temporárias:
                 </h4>
                 <p className="text-[11px] text-slate-400">
-                  Um refúgio celestial seguro desenhado no Canvas com limites fechados e sem perigos. Ao morrer no mundo aberto, sua alma reencarna imediatamente aqui com 100% de HP e todo o Pó de Memória preservado!
+                  Encontre 4 a 6 obeliscos cianos brilhantes espalhados pelo mapa procedural. Interaja com <strong className="text-cyan-300">[E]</strong> para escolher 1 entre 3 poderes cósmicos para a run atual:
+                  <br />• <strong className="text-cyan-300">Lâmina Colossal:</strong> +50% de alcance no golpe com a espada.
+                  <br />• <strong className="text-amber-300">Passos Estilhaçantes:</strong> Dash causa 40 de dano e ganha rastro Dourado.
+                  <br />• <strong className="text-emerald-300">Sifão de Sangue:</strong> +2 HP recuperados ao abater qualquer inimigo.
+                  <br />• <strong className="text-pink-300">Frenesi Implacável:</strong> -50% de tempo de recarga no ataque.
+                  <br /><em className="text-slate-500 text-[10px]">Nota: As bênçãos são temporárias e são limpas ao retornar ao Santuário.</em>
                 </p>
               </div>
 
               <div>
                 <h4 className="text-rose-400 font-bold mb-0.5 flex items-center gap-1.5">
-                  <Flame className="w-3.5 h-3.5" />
-                  2. A Forja da Alma & Meta-Progresso:
+                  <Skull className="w-3.5 h-3.5" />
+                  2. Novas Variantes de Inimigos:
                 </h4>
                 <p className="text-[11px] text-slate-400">
-                  Fale com <strong className="text-rose-300">Kael, o Forjador</strong> para aprimorar permanentemente seus atributos vitais:
-                  <br />• <strong>Vitalidade Titânica:</strong> +20 HP Máximo permanente.
-                  <br />• <strong>Fio da Realidade:</strong> +15 de dano de ataque permanente.
-                  <br />• <strong>Passos Fantasmas:</strong> Reduz a recarga do Dash.
+                  • <strong className="text-rose-400">Caçador (Hunter):</strong> Ágil e implacável em perseguição.
+                  <br />• <strong className="text-purple-400">Bruto Blindado (Brute):</strong> Quadrado pesado com 120 HP e imunidade total a recuo (knockback).
+                  <br />• <strong className="text-orange-400">Atirador (Gunner):</strong> Mantém distância kiting e dispara projéteis de plasma âmbar a cada 2.5s.
                 </p>
               </div>
 
               <div>
-                <h4 className="text-purple-300 font-bold mb-0.5 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  3. Economia de Pó de Memória:
-                </h4>
-                <p className="text-[11px] text-slate-400">
-                  Derrote aberrações no labirinto (+10 Dust) e Senhores do Fragmento (+100 Dust) para acumular recursos eternos.
-                </p>
-              </div>
-
-              <div>
-                <h4 className="text-cyan-300 font-bold mb-0.5 flex items-center gap-1.5">
+                <h4 className="text-amber-300 font-bold mb-0.5 flex items-center gap-1.5">
                   <Zap className="w-3.5 h-3.5" />
-                  4. Portal da Ruptura:
+                  3. Game Feel & Impacto Cinético:
                 </h4>
                 <p className="text-[11px] text-slate-400">
-                  Atravesse o vórtice estelar ao norte do Santuário para adentrar o próximo Ciclo de Combate procedural.
+                  • <strong className="text-white">Flash de Impacto:</strong> Silhueta 100% branca no exato instante do acerto.
+                  <br />• <strong className="text-cyan-300">Recuo Físico (Knockback):</strong> Inimigos atingidos são empurrados para trás na direção do corte.
                 </p>
               </div>
             </div>
 
             <button
               onClick={() => setShowHelp(false)}
-              className="mt-4 w-full rounded-xl bg-purple-500/20 border border-purple-400/40 py-2.5 text-xs font-mono text-purple-200 hover:bg-purple-500/30 transition cursor-pointer"
+              className="mt-4 w-full rounded-xl bg-cyan-500/20 border border-cyan-400/40 py-2.5 text-xs font-mono text-cyan-200 hover:bg-cyan-500/30 transition cursor-pointer"
             >
               Entendido
             </button>

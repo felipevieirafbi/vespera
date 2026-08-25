@@ -16,6 +16,8 @@ import {
   CombatParticle,
   GameState,
   PlayerUpgrades,
+  BoonId,
+  EchoAltar,
 } from '../types/game';
 import { VirtualCamera } from './Camera';
 import { InputManager } from './InputManager';
@@ -38,6 +40,14 @@ export class GameEngine {
   public obstacles: WorldObstacle[] = [];
   public particles: DustParticle[] = [];
   public playerTrail: PlayerTrailPoint[] = [];
+
+  // Phase 9: Active Boons & Echo Altars
+  public activeBoons: BoonId[] = [];
+  public altars: EchoAltar[] = [];
+  public nearbyAltar: EchoAltar | null = null;
+  public isBoonMenuOpen: boolean = false;
+  public hitEnemiesInCurrentDash: Set<number> = new Set();
+  public enemyProjectiles: BossProjectile[] = [];
 
   // Meta-progression and Sanctuary Hub (Phase 8)
   public gameState: GameState = 'SANCTUARY';
@@ -69,6 +79,7 @@ export class GameEngine {
   public isDialogueOpen: boolean = false;
   public onOpenDialogue?: (npc: NPC) => void;
   public onOpenForge?: () => void;
+  public onOpenBoonSelect?: (altar: EchoAltar) => void;
   public onEnterPortal?: () => void;
   public onPlayerDeath?: () => void;
   public onVictory?: () => void;
@@ -123,6 +134,7 @@ export class GameEngine {
     collidingX: false,
     collidingY: false,
     nearbyNPC: null,
+    nearbyAltar: null,
     memoryTears: 1,
     awakenedNPCsCount: 0,
     memoryDust: 0,
@@ -143,6 +155,7 @@ export class GameEngine {
     bossDistance: 9999,
     bossAggro: false,
     victoryItemSpawned: false,
+    activeBoons: [],
   };
 
   private frameCount: number = 0;
@@ -160,6 +173,7 @@ export class GameEngine {
     onStatsUpdate?: (stats: EngineStats) => void,
     onOpenDialogue?: (npc: NPC) => void,
     onOpenForge?: () => void,
+    onOpenBoonSelect?: (altar: EchoAltar) => void,
     onEnterPortal?: () => void,
     onPlayerDeath?: () => void,
     onVictory?: () => void
@@ -179,6 +193,7 @@ export class GameEngine {
     this.onStatsUpdate = onStatsUpdate;
     this.onOpenDialogue = onOpenDialogue;
     this.onOpenForge = onOpenForge;
+    this.onOpenBoonSelect = onOpenBoonSelect;
     this.onEnterPortal = onEnterPortal;
     this.onPlayerDeath = onPlayerDeath;
     this.onVictory = onVictory;
@@ -206,6 +221,8 @@ export class GameEngine {
       dashCooldown: 0,
       attackCooldown: 0,
       invulnerabilityTimer: 0,
+      flashTimer: 0,
+      activeBoons: [],
     };
 
     if (this.gameState === 'SANCTUARY') {
@@ -225,12 +242,53 @@ export class GameEngine {
     return 50 + (this.playerUpgrades.damageLevel || 0) * 15;
   }
 
+  public calculateAttackCooldown(): number {
+    // Phase 9 Frenzy Boon: 50% cooldown reduction (0.3s -> 0.15s)
+    return this.activeBoons.includes('frenzy') ? 0.15 : 0.3;
+  }
+
+  public calculateSlashDimensions(): { radius: number; arcAngle: number } {
+    // Phase 9 Colossal Blade Boon: +50% hitbox size and visual arc
+    if (this.activeBoons.includes('colossal_blade')) {
+      return { radius: 120, arcAngle: Math.PI * 1.15 };
+    }
+    return { radius: 80, arcAngle: Math.PI * 0.85 };
+  }
+
   public calculateDashCooldown(): number {
     return Math.max(0.35, 1.0 - (this.playerUpgrades.dashLevel || 0) * 0.15);
   }
 
   /**
-   * Initializes the peaceful Sanctuary Hub world (Phase 8)
+   * Phase 9: Applies a chosen Boon from an Echo Altar during the current run
+   */
+  public applyBoon(boonId: BoonId, altarId?: number): void {
+    if (!this.activeBoons.includes(boonId)) {
+      this.activeBoons.push(boonId);
+      this.player.activeBoons = [...this.activeBoons];
+    }
+
+    if (altarId !== undefined) {
+      const altar = this.altars.find((a) => a.id === altarId);
+      if (altar) {
+        altar.isActive = false;
+      }
+    } else if (this.nearbyAltar) {
+      this.nearbyAltar.isActive = false;
+    }
+
+    this.audioManager.playBoonSelect();
+    this.addFloatingDamage(this.player.x, this.player.y - 25, 'BÊNÇÃO ABSORVIDA!', '#00FFFF');
+    this.stats.activeBoons = [...this.activeBoons];
+
+    if (this.onStatsUpdate) {
+      this.onStatsUpdate({ ...this.stats });
+    }
+  }
+
+  /**
+   * Initializes the peaceful Sanctuary Hub world (Phase 8 & 9)
+   * CRITICAL ROGUELIKE RULE: activeBoons are always reset to empty on death / return to Sanctuary!
    */
   public initSanctuary(): void {
     this.gameState = 'SANCTUARY';
@@ -240,6 +298,14 @@ export class GameEngine {
       minY: -450,
       maxY: 450,
     };
+
+    // Phase 9 Rule: Clear active temporary boons on death/sanctuary return
+    this.activeBoons = [];
+    this.player.activeBoons = [];
+    this.altars = [];
+    this.nearbyAltar = null;
+    this.enemyProjectiles = [];
+    this.hitEnemiesInCurrentDash.clear();
 
     this.obstacles = WorldGenerator.generateSanctuaryObstacles();
     this.npcs = WorldGenerator.generateSanctuaryNPCs(this.lyraRescued);
@@ -262,6 +328,7 @@ export class GameEngine {
     this.player.dashCooldown = 0;
     this.player.attackCooldown = 0;
     this.player.invulnerabilityTimer = 0;
+    this.player.flashTimer = 0;
 
     this.stats.gameState = 'SANCTUARY';
     this.stats.currentBiome = 'Santuário do Vazio';
@@ -276,10 +343,12 @@ export class GameEngine {
     this.stats.inPortalZone = false;
     this.stats.hp = this.player.hp;
     this.stats.maxHp = this.player.maxHp;
+    this.stats.activeBoons = [];
+    this.stats.nearbyAltar = null;
   }
 
   /**
-   * Initializes the dangerous procedural open world with Aberrations and Boss
+   * Initializes the dangerous procedural open world with Aberrations, Boss, and Echo Altars
    */
   public initOpenWorld(incrementCycle: boolean = true): void {
     this.gameState = 'PLAYING';
@@ -297,9 +366,12 @@ export class GameEngine {
 
     this.obstacles = WorldGenerator.generateBiomesAndObstacles(300, this.anchors);
     this.npcs = WorldGenerator.generateNPCs(this.anchors, this.lyraRescued);
-    this.enemies = WorldGenerator.generateEnemies(30, this.anchors);
+    this.enemies = WorldGenerator.generateEnemies(32, this.anchors);
+    this.altars = WorldGenerator.generateEchoAltars(5, this.anchors);
     this.boss = WorldGenerator.generateBoss(this.anchors);
     this.bossProjectiles = [];
+    this.enemyProjectiles = [];
+    this.hitEnemiesInCurrentDash.clear();
     this.victoryItem = null;
     this.activeSlash = null;
     this.combatParticles = [];
@@ -316,6 +388,7 @@ export class GameEngine {
     this.player.dashCooldown = 0;
     this.player.attackCooldown = 0;
     this.player.invulnerabilityTimer = 0;
+    this.player.flashTimer = 0;
 
     this.stats.gameState = 'PLAYING';
     this.stats.totalObstacles = this.obstacles.length;
@@ -333,6 +406,8 @@ export class GameEngine {
     this.stats.inPortalZone = false;
     this.stats.hp = this.player.hp;
     this.stats.maxHp = this.player.maxHp;
+    this.stats.activeBoons = [...this.activeBoons];
+    this.stats.nearbyAltar = null;
   }
 
   /**
@@ -637,6 +712,26 @@ export class GameEngine {
     this.nearbyNPC = closestNPC;
     this.stats.nearbyNPC = closestNPC;
 
+    // Phase 9: Proximity detection for Echo Altars (70px radius)
+    let closestAltar: EchoAltar | null = null;
+    let closestAltarDist = Infinity;
+
+    if (this.gameState === 'PLAYING') {
+      for (const altar of this.altars) {
+        altar.pulsePhase += dt * 2.0;
+        if (altar.isActive) {
+          const dist = Math.hypot(this.player.x - altar.x, this.player.y - altar.y);
+          if (dist <= 75 && dist < closestAltarDist) {
+            closestAltarDist = dist;
+            closestAltar = altar;
+          }
+        }
+      }
+    }
+
+    this.nearbyAltar = closestAltar;
+    this.stats.nearbyAltar = closestAltar;
+
     // Interaction Trigger (E key or Enter key)
     if (
       (this.inputManager.consumeKey('KeyE') ||
@@ -644,7 +739,14 @@ export class GameEngine {
         this.inputManager.consumeKey('Enter')) &&
       this.ruptureState === 'idle'
     ) {
-      this.openDialogueForNearbyNPC();
+      // 1. Altar interaction takes priority if near an active Altar
+      if (this.nearbyAltar && this.nearbyAltar.isActive && !this.isDialogueOpen && !this.isBoonMenuOpen) {
+        if (this.onOpenBoonSelect) {
+          this.onOpenBoonSelect(this.nearbyAltar);
+        }
+      } else if (this.nearbyNPC) {
+        this.openDialogueForNearbyNPC();
+      }
     }
 
     // Sanctuary Portal Area Detection (at x: 0, y: -250)
@@ -655,6 +757,19 @@ export class GameEngine {
       if (distToPortal <= 48) {
         this.enterPortal();
         return;
+      }
+    }
+
+    // Hit flash decay for entities (White Impact Frame)
+    if (this.player.flashTimer > 0) {
+      this.player.flashTimer = Math.max(0, this.player.flashTimer - dt);
+    }
+    if (this.boss && this.boss.flashTimer && this.boss.flashTimer > 0) {
+      this.boss.flashTimer = Math.max(0, this.boss.flashTimer - dt);
+    }
+    for (const e of this.enemies) {
+      if (e.flashTimer && e.flashTimer > 0) {
+        e.flashTimer = Math.max(0, e.flashTimer - dt);
       }
     }
 
@@ -672,11 +787,12 @@ export class GameEngine {
 
     // Dash Execution
     const isDashRequested = this.inputManager.consumeDash();
-    if (isDashRequested && this.player.dashCooldown <= 0 && !this.player.isDashing && this.ruptureState === 'idle' && !this.isDialogueOpen) {
+    if (isDashRequested && this.player.dashCooldown <= 0 && !this.player.isDashing && this.ruptureState === 'idle' && !this.isDialogueOpen && !this.isBoonMenuOpen) {
       this.player.isDashing = true;
       this.player.dashTimer = 0.2; // 200ms duration
       this.player.dashCooldown = dashCooldownMax;
       this.player.invulnerabilityTimer = 0.2; // I-frames during dash
+      this.hitEnemiesInCurrentDash.clear();
       this.audioManager.playDash();
     }
 
@@ -684,25 +800,101 @@ export class GameEngine {
       this.player.dashTimer -= dt;
       if (this.player.dashTimer <= 0) {
         this.player.isDashing = false;
+        this.hitEnemiesInCurrentDash.clear();
+      }
+
+      // Phase 9: Shattering Dash Boon Mechanics (Dash deals 40 instant damage!)
+      if (this.activeBoons.includes('shattering_dash') && this.gameState === 'PLAYING') {
+        // 1. Dash hit against Boss
+        if (this.boss && !this.boss.isDefeated && !this.hitEnemiesInCurrentDash.has(9999)) {
+          const distToBoss = Math.hypot(this.player.x - this.boss.x, this.player.y - this.boss.y);
+          if (distToBoss <= 30 + this.boss.size / 2) {
+            this.hitEnemiesInCurrentDash.add(9999);
+            this.boss.hp = Math.max(0, this.boss.hp - 40);
+            this.boss.flashTimer = 0.06;
+            this.audioManager.playShatterDash();
+            this.addFloatingDamage(this.boss.x, this.boss.y, 40, '#fbbf24');
+            this.spawnCrimsonExplosion(this.boss.x, this.boss.y, 22);
+            this.shakeX = (Math.random() - 0.5) * 14;
+            this.shakeY = (Math.random() - 0.5) * 14;
+
+            if (this.boss.hp <= 0) {
+              this.boss.isDefeated = true;
+              this.memoryDust += 100;
+              this.stats.memoryDust = this.memoryDust;
+              this.audioManager.playDustCollect();
+              this.addFloatingDamage(this.boss.x, this.boss.y - 30, '+100 Dust', '#e879f9');
+              this.spawnCrimsonExplosion(this.boss.x, this.boss.y, 120);
+              this.victoryItem = { active: true, x: this.boss.x, y: this.boss.y, radius: 26, pulse: 0 };
+              this.audioManager.playVictory();
+            }
+          }
+        }
+
+        // 2. Dash hit against Normal Enemies
+        for (const enemy of this.enemies) {
+          if (!this.hitEnemiesInCurrentDash.has(enemy.id)) {
+            const dist = Math.hypot(this.player.x - enemy.x, this.player.y - enemy.y);
+            if (dist <= 26 + enemy.size / 2) {
+              this.hitEnemiesInCurrentDash.add(enemy.id);
+              enemy.hp -= 40;
+              enemy.flashTimer = 0.06;
+              this.audioManager.playShatterDash();
+              this.addFloatingDamage(enemy.x, enemy.y, 40, '#fbbf24');
+              this.spawnCrimsonExplosion(enemy.x, enemy.y, 16);
+
+              // Knockback if not immune
+              if (!enemy.isImmuneKnockback) {
+                const kAngle = Math.atan2(enemy.y - this.player.y, enemy.x - this.player.x);
+                enemy.x += Math.cos(kAngle) * 55;
+                enemy.y += Math.sin(kAngle) * 55;
+              }
+            }
+          }
+        }
+
+        // Filter and reward killed enemies from dash
+        const survivingEnemies: Enemy[] = [];
+        for (const enemy of this.enemies) {
+          if (enemy.hp <= 0) {
+            this.enemiesDefeatedCount++;
+            this.memoryDust += 10;
+            this.stats.memoryDust = this.memoryDust;
+            this.audioManager.playDustCollect();
+            this.addFloatingDamage(enemy.x, enemy.y - 20, '+10 Dust', '#c084fc');
+
+            // Phase 9 Blood Siphon Boon: +2 HP on kill
+            if (this.activeBoons.includes('blood_siphon')) {
+              this.player.hp = Math.min(this.player.maxHp, this.player.hp + 2);
+              this.addFloatingDamage(this.player.x, this.player.y - 25, '+2 HP', '#34d399');
+            }
+          } else {
+            survivingEnemies.push(enemy);
+          }
+        }
+        this.enemies = survivingEnemies;
+        this.stats.enemiesAlive = this.enemies.length;
+        this.stats.enemiesDefeated = this.enemiesDefeatedCount;
       }
     }
 
-    // Attack Execution (Slash)
+    // Attack Execution (Slash with Frenzy & Colossal Blade modifiers)
     const isAttackRequested = this.inputManager.consumeAttack();
-    if (isAttackRequested && this.player.attackCooldown <= 0 && this.ruptureState === 'idle' && !this.isDialogueOpen) {
-      this.player.attackCooldown = 0.3; // 300ms Cooldown
+    if (isAttackRequested && this.player.attackCooldown <= 0 && this.ruptureState === 'idle' && !this.isDialogueOpen && !this.isBoonMenuOpen) {
+      this.player.attackCooldown = this.calculateAttackCooldown();
       this.audioManager.playAttack();
 
       const attackAngle = this.player.facingAngle;
       const attackDamage = this.calculateAttackDamage();
+      const slashDims = this.calculateSlashDimensions();
 
       this.activeSlash = {
         active: true,
         startX: this.player.x,
         startY: this.player.y,
         angle: attackAngle,
-        radius: 80,
-        arcAngle: Math.PI * 0.85,
+        radius: slashDims.radius,
+        arcAngle: slashDims.arcAngle,
         timer: 0,
         duration: 0.15,
       };
@@ -711,15 +903,16 @@ export class GameEngine {
       let hitBoss = false;
       if (this.boss && !this.boss.isDefeated) {
         const dist = Math.hypot(this.boss.x - this.player.x, this.boss.y - this.player.y);
-        if (dist <= 80 + this.boss.size / 2) {
+        if (dist <= slashDims.radius + this.boss.size / 2) {
           const angleToBoss = Math.atan2(this.boss.y - this.player.y, this.boss.x - this.player.x);
           let diffAngle = angleToBoss - attackAngle;
           while (diffAngle < -Math.PI) diffAngle += Math.PI * 2;
           while (diffAngle > Math.PI) diffAngle -= Math.PI * 2;
 
-          if (Math.abs(diffAngle) <= (Math.PI * 0.85) / 2 + 0.35) {
+          if (Math.abs(diffAngle) <= slashDims.arcAngle / 2 + 0.35) {
             hitBoss = true;
             this.boss.hp = Math.max(0, this.boss.hp - attackDamage);
+            this.boss.flashTimer = 0.06; // White hit flash!
             this.hitStopTimer = 0.04;
             this.audioManager.playHit();
             this.addFloatingDamage(this.boss.x, this.boss.y, attackDamage, '#f43f5e');
@@ -755,30 +948,49 @@ export class GameEngine {
         const dist = Math.hypot(enemy.x - this.player.x, enemy.y - this.player.y);
         let hit = false;
 
-        if (dist <= 80 + enemy.size / 2) {
+        if (dist <= slashDims.radius + enemy.size / 2) {
           const angleToEnemy = Math.atan2(enemy.y - this.player.y, enemy.x - this.player.x);
           let diffAngle = angleToEnemy - attackAngle;
           while (diffAngle < -Math.PI) diffAngle += Math.PI * 2;
           while (diffAngle > Math.PI) diffAngle -= Math.PI * 2;
 
-          if (Math.abs(diffAngle) <= (Math.PI * 0.85) / 2 + 0.25) {
+          if (Math.abs(diffAngle) <= slashDims.arcAngle / 2 + 0.3) {
             hit = true;
           }
         }
 
         if (hit) {
           anyEnemyHit = true;
-          this.enemiesDefeatedCount++;
+          enemy.hp -= attackDamage;
+          enemy.flashTimer = 0.06; // White hit flash!
           this.hitStopTimer = 0.04;
           this.audioManager.playHit();
           this.addFloatingDamage(enemy.x, enemy.y, attackDamage, '#f43f5e');
           this.spawnCrimsonExplosion(enemy.x, enemy.y, 18);
 
-          // Meta-progression reward: +10 Dust
-          this.memoryDust += 10;
-          this.stats.memoryDust = this.memoryDust;
-          this.audioManager.playDustCollect();
-          this.addFloatingDamage(enemy.x, enemy.y - 20, '+10 Dust', '#c084fc');
+          // Knockback (Repulsão) on sword hit (unless immune like Brute)
+          if (!enemy.isImmuneKnockback) {
+            const knockAngle = Math.atan2(enemy.y - this.player.y, enemy.x - this.player.x);
+            enemy.x += Math.cos(knockAngle) * 55;
+            enemy.y += Math.sin(knockAngle) * 55;
+          }
+
+          if (enemy.hp <= 0) {
+            this.enemiesDefeatedCount++;
+            // Meta-progression reward: +10 Dust
+            this.memoryDust += 10;
+            this.stats.memoryDust = this.memoryDust;
+            this.audioManager.playDustCollect();
+            this.addFloatingDamage(enemy.x, enemy.y - 20, '+10 Dust', '#c084fc');
+
+            // Phase 9 Blood Siphon Boon: +2 HP on kill
+            if (this.activeBoons.includes('blood_siphon')) {
+              this.player.hp = Math.min(this.player.maxHp, this.player.hp + 2);
+              this.addFloatingDamage(this.player.x, this.player.y - 25, '+2 HP', '#34d399');
+            }
+          } else {
+            remainingEnemies.push(enemy);
+          }
         } else {
           remainingEnemies.push(enemy);
         }
@@ -822,7 +1034,7 @@ export class GameEngine {
     this.floatingDamageNumbers = this.floatingDamageNumbers.filter((fdn) => fdn.timer < fdn.duration);
 
     // Movement & Velocity
-    const moveVector = this.ruptureState === 'idle' && !this.isDialogueOpen ? this.inputManager.getMovementVector() : { x: 0, y: 0 };
+    const moveVector = this.ruptureState === 'idle' && !this.isDialogueOpen && !this.isBoonMenuOpen ? this.inputManager.getMovementVector() : { x: 0, y: 0 };
     const isSprint = this.inputManager.isSprinting();
     let currentSpeed = this.player.speed * (isSprint ? this.config.sprintMultiplier : 1.0);
 
@@ -910,6 +1122,7 @@ export class GameEngine {
         if (!this.player.isDashing && this.player.invulnerabilityTimer <= 0) {
           this.player.hp = Math.max(0, this.player.hp - 25);
           this.player.invulnerabilityTimer = 0.5;
+          this.player.flashTimer = 0.06; // White hit flash on player
           this.damageVignetteAlpha = 0.8;
           this.shakeX = (Math.random() - 0.5) * 18;
           this.shakeY = (Math.random() - 0.5) * 18;
@@ -940,6 +1153,7 @@ export class GameEngine {
         if (!this.player.isDashing && this.player.invulnerabilityTimer <= 0) {
           this.player.hp = Math.max(0, this.player.hp - 15);
           this.player.invulnerabilityTimer = 0.5;
+          this.player.flashTimer = 0.06;
           this.damageVignetteAlpha = 0.65;
           this.shakeX = (Math.random() - 0.5) * 14;
           this.shakeY = (Math.random() - 0.5) * 14;
@@ -961,6 +1175,41 @@ export class GameEngine {
     }
     this.bossProjectiles = activeProjectiles;
 
+    // Phase 9: Gunner Enemy Projectiles Update
+    const activeEnemyProjectiles: BossProjectile[] = [];
+    for (const proj of this.enemyProjectiles) {
+      proj.x += proj.vx * dt;
+      proj.y += proj.vy * dt;
+      proj.life += dt;
+
+      const pDist = Math.hypot(this.player.x - proj.x, this.player.y - proj.y);
+      if (pDist <= proj.radius + this.player.size / 2) {
+        if (!this.player.isDashing && this.player.invulnerabilityTimer <= 0) {
+          const dmg = proj.damage || 15;
+          this.player.hp = Math.max(0, this.player.hp - dmg);
+          this.player.invulnerabilityTimer = 0.5;
+          this.player.flashTimer = 0.06;
+          this.damageVignetteAlpha = 0.6;
+          this.shakeX = (Math.random() - 0.5) * 12;
+          this.shakeY = (Math.random() - 0.5) * 12;
+          this.audioManager.playHit();
+          this.addFloatingDamage(this.player.x, this.player.y, dmg, '#f97316');
+          this.spawnCrimsonExplosion(proj.x, proj.y, 8);
+
+          if (this.player.hp <= 0) {
+            this.player.hp = 0;
+            this.forceRupture();
+          }
+        }
+        continue;
+      }
+
+      if (proj.life < proj.maxLife) {
+        activeEnemyProjectiles.push(proj);
+      }
+    }
+    this.enemyProjectiles = activeEnemyProjectiles;
+
     // Victory Item Collision
     if (this.victoryItem && this.victoryItem.active) {
       this.victoryItem.pulse += dt * 3.5;
@@ -974,23 +1223,70 @@ export class GameEngine {
       }
     }
 
-    // Enemy AI (Only in PLAYING mode)
+    // Phase 9: Enemy AI Variants (Hunter, Brute, Gunner)
     if (this.gameState === 'PLAYING' && this.ruptureState === 'idle') {
       for (const enemy of this.enemies) {
         const distToPlayer = Math.hypot(this.player.x - enemy.x, this.player.y - enemy.y);
 
-        if (distToPlayer <= enemy.aggroRadius) {
-          enemy.isAggro = true;
-          const dirX = (this.player.x - enemy.x) / (distToPlayer || 1);
-          const dirY = (this.player.y - enemy.y) / (distToPlayer || 1);
+        if (enemy.type === 'gunner') {
+          // GUNNER AI: Survival kiting (<250px flees, fires every 2.5s)
+          if (distToPlayer < 250) {
+            enemy.isAggro = true;
+            // Flee away from player
+            const fleeX = (enemy.x - this.player.x) / (distToPlayer || 1);
+            const fleeY = (enemy.y - this.player.y) / (distToPlayer || 1);
+            enemy.vx = fleeX * enemy.speed * 1.1;
+            enemy.vy = fleeY * enemy.speed * 1.1;
+            enemy.facingAngle = Math.atan2(this.player.y - enemy.y, this.player.x - enemy.x);
+          } else if (distToPlayer <= enemy.aggroRadius) {
+            enemy.isAggro = true;
+            enemy.facingAngle = Math.atan2(this.player.y - enemy.y, this.player.x - enemy.x);
+            // Slight strafing
+            enemy.vx = 0;
+            enemy.vy = 0;
+          } else {
+            enemy.isAggro = false;
+            enemy.vx = 0;
+            enemy.vy = 0;
+          }
 
-          enemy.vx = dirX * enemy.speed;
-          enemy.vy = dirY * enemy.speed;
-          enemy.facingAngle = Math.atan2(dirY, dirX);
+          // Gunner Shooting logic
+          if (distToPlayer <= enemy.aggroRadius) {
+            enemy.shootTimer = (enemy.shootTimer || 0) + dt;
+            if (enemy.shootTimer >= 2.5) {
+              enemy.shootTimer = 0;
+              this.audioManager.playGunnerShoot();
+              const angle = Math.atan2(this.player.y - enemy.y, this.player.x - enemy.x);
+              this.enemyProjectiles.push({
+                id: Math.random(),
+                x: enemy.x,
+                y: enemy.y,
+                vx: Math.cos(angle) * 230,
+                vy: Math.sin(angle) * 230,
+                radius: 6,
+                color: '#f97316',
+                life: 0,
+                maxLife: 3.5,
+                damage: 15,
+                source: 'gunner',
+              });
+            }
+          }
         } else {
-          enemy.isAggro = false;
-          enemy.vx = 0;
-          enemy.vy = 0;
+          // HUNTER & BRUTE: Direct Pursuit AI
+          if (distToPlayer <= enemy.aggroRadius) {
+            enemy.isAggro = true;
+            const dirX = (this.player.x - enemy.x) / (distToPlayer || 1);
+            const dirY = (this.player.y - enemy.y) / (distToPlayer || 1);
+
+            enemy.vx = dirX * enemy.speed;
+            enemy.vy = dirY * enemy.speed;
+            enemy.facingAngle = Math.atan2(dirY, dirX);
+          } else {
+            enemy.isAggro = false;
+            enemy.vx = 0;
+            enemy.vy = 0;
+          }
         }
 
         const eCollision = CollisionSystem.resolveEntityMovement(
@@ -1007,13 +1303,15 @@ export class GameEngine {
 
         if (contactDist < contactRadius) {
           if (!this.player.isDashing && this.player.invulnerabilityTimer <= 0) {
-            this.player.hp = Math.max(0, this.player.hp - 20);
+            const dmg = enemy.contactDamage || 20;
+            this.player.hp = Math.max(0, this.player.hp - dmg);
             this.player.invulnerabilityTimer = 0.5;
+            this.player.flashTimer = 0.06;
             this.damageVignetteAlpha = 0.7;
             this.shakeX = (Math.random() - 0.5) * 16;
             this.shakeY = (Math.random() - 0.5) * 16;
             this.audioManager.playHit();
-            this.addFloatingDamage(this.player.x, this.player.y, 20, '#fb7185');
+            this.addFloatingDamage(this.player.x, this.player.y, dmg, '#fb7185');
 
             const knockAngle = Math.atan2(this.player.y - enemy.y, this.player.x - enemy.x);
             this.player.x += Math.cos(knockAngle) * 35;
@@ -1095,6 +1393,9 @@ export class GameEngine {
     this.stats.gameState = this.gameState;
     this.stats.upgrades = { ...this.playerUpgrades };
     this.stats.lyraRescued = this.lyraRescued;
+    this.stats.nearbyNPC = this.nearbyNPC;
+    this.stats.nearbyAltar = this.nearbyAltar;
+    this.stats.activeBoons = [...this.activeBoons];
 
     if (this.onStatsUpdate) {
       this.onStatsUpdate({ ...this.stats });
@@ -1129,6 +1430,7 @@ export class GameEngine {
 
     if (this.gameState === 'PLAYING') {
       this.renderAnchors(ctx);
+      this.renderAltars(ctx);
     }
 
     let visibleObstacles = 0;
@@ -1146,6 +1448,7 @@ export class GameEngine {
       this.renderEnemies(ctx);
       this.renderBoss(ctx);
       this.renderBossProjectiles(ctx);
+      this.renderEnemyProjectiles(ctx);
       this.renderVictoryItem(ctx);
     }
 
@@ -1552,6 +1855,95 @@ export class GameEngine {
     }
   }
 
+  private renderAltars(ctx: CanvasRenderingContext2D): void {
+    if (this.altars.length === 0) return;
+
+    for (const altar of this.altars) {
+      if (!this.camera.isVisible(altar.x - 70, altar.y - 70, 140, 140, 70)) {
+        continue;
+      }
+
+      ctx.save();
+      const isNearby = this.nearbyAltar?.id === altar.id;
+      const pulse = Math.sin(altar.pulsePhase) * 0.12 + 0.88;
+
+      if (altar.isActive) {
+        // Active Pulsating Altar of Echoes
+        if (this.config.enableGlow) {
+          ctx.shadowColor = '#00FFFF';
+          ctx.shadowBlur = isNearby ? 35 : 22;
+        }
+
+        // Circular magic seal on ground
+        ctx.strokeStyle = isNearby ? '#38bdf8' : 'rgba(0, 255, 255, 0.4)';
+        ctx.lineWidth = isNearby ? 2 : 1.5;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.arc(altar.x, altar.y, (altar.radius + 14) * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Central Obelisk / Pillar base
+        ctx.fillStyle = '#0f172a';
+        ctx.strokeStyle = '#00FFFF';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(altar.x, altar.y - altar.radius * 1.3 * pulse);
+        ctx.lineTo(altar.x + altar.radius * 0.8, altar.y + altar.radius * 0.9);
+        ctx.lineTo(altar.x - altar.radius * 0.8, altar.y + altar.radius * 0.9);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Inner glowing core & floating rune
+        ctx.fillStyle = '#00FFFF';
+        ctx.beginPath();
+        ctx.arc(altar.x, altar.y - 2, 7 * pulse, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(altar.x, altar.y - 2, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Altar Label & Interaction Prompt
+        ctx.font = 'bold 11px monospace';
+        ctx.textAlign = 'center';
+        if (isNearby) {
+          ctx.fillStyle = '#38bdf8';
+          ctx.shadowColor = '#38bdf8';
+          ctx.shadowBlur = 12;
+          ctx.fillText('[E] Altar de Eco', altar.x, altar.y - altar.radius - 18);
+          ctx.font = '9px monospace';
+          ctx.fillStyle = '#e0f2fe';
+          ctx.fillText('Absorver Bênção', altar.x, altar.y - altar.radius - 6);
+        } else {
+          ctx.fillStyle = 'rgba(0, 255, 255, 0.85)';
+          ctx.fillText('Altar de Eco', altar.x, altar.y - altar.radius - 10);
+        }
+      } else {
+        // Depleted / Inactive Altar
+        ctx.fillStyle = '#1e293b';
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(altar.x, altar.y - altar.radius * 1.1);
+        ctx.lineTo(altar.x + altar.radius * 0.8, altar.y + altar.radius * 0.9);
+        ctx.lineTo(altar.x - altar.radius * 0.8, altar.y + altar.radius * 0.9);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = '9px monospace';
+        ctx.fillStyle = '#64748b';
+        ctx.textAlign = 'center';
+        ctx.fillText('[Exaurido]', altar.x, altar.y - altar.radius - 6);
+      }
+
+      ctx.restore();
+    }
+  }
+
   private renderEnemies(ctx: CanvasRenderingContext2D): void {
     if (this.enemies.length === 0) return;
 
@@ -1560,10 +1952,12 @@ export class GameEngine {
         continue;
       }
 
+      const isFlash = (enemy.flashTimer || 0) > 0;
+
       ctx.save();
 
       if (enemy.isAggro) {
-        ctx.strokeStyle = 'rgba(244, 63, 94, 0.4)';
+        ctx.strokeStyle = enemy.type === 'gunner' ? 'rgba(249, 115, 22, 0.4)' : enemy.type === 'brute' ? 'rgba(168, 85, 247, 0.4)' : 'rgba(244, 63, 94, 0.4)';
         ctx.lineWidth = 1.5;
         ctx.setLineDash([3, 3]);
         ctx.beginPath();
@@ -1573,32 +1967,83 @@ export class GameEngine {
       }
 
       if (this.config.enableGlow) {
-        ctx.shadowColor = '#f43f5e';
+        ctx.shadowColor = isFlash ? '#FFFFFF' : enemy.color;
         ctx.shadowBlur = enemy.isAggro ? 25 : 15;
       }
 
       ctx.translate(enemy.x, enemy.y);
       ctx.rotate(enemy.facingAngle);
 
-      ctx.fillStyle = enemy.color;
-      ctx.beginPath();
-      ctx.moveTo(enemy.size * 0.8, 0);
-      ctx.lineTo(-enemy.size * 0.6, -enemy.size * 0.6);
-      ctx.lineTo(-enemy.size * 0.3, 0);
-      ctx.lineTo(-enemy.size * 0.6, enemy.size * 0.6);
-      ctx.closePath();
-      ctx.fill();
+      // Flash of Impact: 100% white during damage frame
+      ctx.fillStyle = isFlash ? '#FFFFFF' : enemy.color;
 
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
+      if (enemy.type === 'brute') {
+        // Brute: Heavy armored square with reinforced corners
+        const sz = enemy.size;
+        ctx.fillRect(-sz / 2, -sz / 2, sz, sz);
+        ctx.strokeStyle = isFlash ? '#FFFFFF' : '#fbcfe8';
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(-sz / 2, -sz / 2, sz, sz);
 
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
-      ctx.fill();
+        // Core
+        ctx.fillStyle = isFlash ? '#FFFFFF' : '#ffffff';
+        ctx.beginPath();
+        ctx.arc(0, 0, 5, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (enemy.type === 'gunner') {
+        // Gunner: Agile diamond with amber targeting iris
+        const sz = enemy.size;
+        ctx.beginPath();
+        ctx.moveTo(sz * 0.9, 0);
+        ctx.lineTo(0, -sz * 0.7);
+        ctx.lineTo(-sz * 0.7, 0);
+        ctx.lineTo(0, sz * 0.7);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = isFlash ? '#FFFFFF' : '#fed7aa';
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+
+        ctx.fillStyle = isFlash ? '#FFFFFF' : '#ffffff';
+        ctx.beginPath();
+        ctx.arc(sz * 0.25, 0, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Hunter: Classic razor-sharp triangle
+        ctx.beginPath();
+        ctx.moveTo(enemy.size * 0.8, 0);
+        ctx.lineTo(-enemy.size * 0.6, -enemy.size * 0.6);
+        ctx.lineTo(-enemy.size * 0.3, 0);
+        ctx.lineTo(-enemy.size * 0.6, enemy.size * 0.6);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = isFlash ? '#FFFFFF' : '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.fillStyle = isFlash ? '#FFFFFF' : '#ffffff';
+        ctx.beginPath();
+        ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       ctx.restore();
+
+      // For Brutes or damaged enemies, render mini HP gauge
+      const enemyMaxHp = enemy.maxHp || 30;
+      if (enemy.hp < enemyMaxHp || enemy.type === 'brute') {
+        ctx.save();
+        const hpRatio = Math.max(0, enemy.hp / enemyMaxHp);
+        const barW = enemy.size + 10;
+        const barH = 3;
+        ctx.fillStyle = '#050510';
+        ctx.fillRect(enemy.x - barW / 2, enemy.y - enemy.size / 2 - 8, barW, barH);
+        ctx.fillStyle = enemy.color;
+        ctx.fillRect(enemy.x - barW / 2, enemy.y - enemy.size / 2 - 8, barW * hpRatio, barH);
+        ctx.restore();
+      }
     }
   }
 
@@ -1609,10 +2054,12 @@ export class GameEngine {
       return;
     }
 
+    const isFlash = (this.boss.flashTimer || 0) > 0;
+
     ctx.save();
 
     if (this.config.enableGlow) {
-      ctx.shadowColor = '#f43f5e';
+      ctx.shadowColor = isFlash ? '#FFFFFF' : '#f43f5e';
       ctx.shadowBlur = this.boss.isAggro ? 40 : 25;
     }
 
@@ -1620,13 +2067,13 @@ export class GameEngine {
     ctx.translate(this.boss.x, this.boss.y);
     ctx.rotate(this.boss.ringRotation);
 
-    ctx.strokeStyle = 'rgba(244, 63, 94, 0.7)';
+    ctx.strokeStyle = isFlash ? '#FFFFFF' : 'rgba(244, 63, 94, 0.7)';
     ctx.lineWidth = 2.5;
     ctx.beginPath();
     ctx.ellipse(0, 0, 52, 28, 0, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.strokeStyle = 'rgba(251, 113, 133, 0.6)';
+    ctx.strokeStyle = isFlash ? '#FFFFFF' : 'rgba(251, 113, 133, 0.6)';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.ellipse(0, 0, 28, 52, Math.PI / 4, 0, Math.PI * 2);
@@ -1637,7 +2084,7 @@ export class GameEngine {
     ctx.translate(this.boss.x, this.boss.y);
     ctx.rotate(this.boss.facingAngle);
 
-    ctx.fillStyle = this.boss.color;
+    ctx.fillStyle = isFlash ? '#FFFFFF' : this.boss.color;
     ctx.beginPath();
     ctx.moveTo(this.boss.size / 2, 0);
     ctx.lineTo(0, -this.boss.size / 2);
@@ -1701,6 +2148,35 @@ export class GameEngine {
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
       ctx.arc(proj.x, proj.y, proj.radius * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+  }
+
+  private renderEnemyProjectiles(ctx: CanvasRenderingContext2D): void {
+    if (this.enemyProjectiles.length === 0) return;
+
+    for (const proj of this.enemyProjectiles) {
+      if (!this.camera.isVisible(proj.x - 20, proj.y - 20, 40, 40, 20)) {
+        continue;
+      }
+
+      ctx.save();
+      ctx.fillStyle = proj.color;
+
+      if (this.config.enableGlow) {
+        ctx.shadowColor = '#f97316';
+        ctx.shadowBlur = 16;
+      }
+
+      ctx.beginPath();
+      ctx.arc(proj.x, proj.y, proj.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(proj.x, proj.y, proj.radius * 0.4, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.restore();
@@ -1784,14 +2260,20 @@ export class GameEngine {
   }
 
   private renderPlayerTrail(ctx: CanvasRenderingContext2D): void {
+    const hasShatterDash = this.activeBoons.includes('shattering_dash');
+
     for (let i = this.playerTrail.length - 1; i >= 0; i--) {
       const pt = this.playerTrail[i];
       const decay = 1 - i / this.playerTrail.length;
       const alpha = pt.alpha * decay;
 
       ctx.save();
-      ctx.fillStyle = pt.isDash ? '#67e8f9' : '#00FFFF';
-      ctx.globalAlpha = alpha * 0.45;
+      if (pt.isDash) {
+        ctx.fillStyle = hasShatterDash ? '#fbbf24' : '#67e8f9';
+      } else {
+        ctx.fillStyle = '#00FFFF';
+      }
+      ctx.globalAlpha = alpha * 0.55;
 
       ctx.translate(pt.x, pt.y);
       ctx.rotate(pt.angle);
@@ -1809,22 +2291,33 @@ export class GameEngine {
       return;
     }
 
+    const isFlash = (this.player.flashTimer || 0) > 0;
+    const hasShatterDash = this.activeBoons.includes('shattering_dash');
+
     if (this.config.enableGlow) {
-      ctx.shadowColor = this.player.isDashing ? '#ffffff' : this.player.color;
+      ctx.shadowColor = isFlash
+        ? '#FFFFFF'
+        : this.player.isDashing
+        ? (hasShatterDash ? '#f59e0b' : '#ffffff')
+        : this.player.color;
       ctx.shadowBlur = this.player.isDashing ? 35 : 22;
     }
 
     ctx.translate(this.player.x, this.player.y);
     ctx.rotate(this.player.facingAngle);
 
-    ctx.fillStyle = this.player.isDashing ? '#ffffff' : this.player.color;
+    ctx.fillStyle = isFlash
+      ? '#FFFFFF'
+      : this.player.isDashing
+      ? (hasShatterDash ? '#fbbf24' : '#ffffff')
+      : this.player.color;
     ctx.fillRect(-this.player.size / 2, -this.player.size / 2, this.player.size, this.player.size);
 
     ctx.lineWidth = 2;
-    ctx.strokeStyle = '#FFFFFF';
+    ctx.strokeStyle = isFlash ? '#FFFFFF' : '#FFFFFF';
     ctx.strokeRect(-this.player.size / 2, -this.player.size / 2, this.player.size, this.player.size);
 
-    ctx.fillStyle = '#050510';
+    ctx.fillStyle = isFlash ? '#FFFFFF' : '#050510';
     ctx.beginPath();
     ctx.arc(this.player.size * 0.2, 0, 3, 0, Math.PI * 2);
     ctx.fill();

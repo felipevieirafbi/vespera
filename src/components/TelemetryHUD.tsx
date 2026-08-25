@@ -1,5 +1,6 @@
 import React from 'react';
-import { EngineStats } from '../types/game';
+import { EngineStats, BoonId } from '../types/game';
+import { ALL_BOONS } from './BoonSelection';
 import {
   Activity,
   Compass,
@@ -17,6 +18,8 @@ import {
   Sword,
   Skull,
   Crosshair,
+  Flame,
+  Layers,
 } from 'lucide-react';
 
 interface TelemetryHUDProps {
@@ -50,6 +53,8 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
     return 'bg-rose-500 shadow-[0_0_15px_#f43f5e] animate-pulse';
   };
 
+  const activeBoonsList = (stats.activeBoons || []).map((id) => ALL_BOONS[id]).filter(Boolean);
+
   return (
     <div
       id="telemetry-hud-root"
@@ -62,8 +67,8 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
             <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
             CICLO DE REALIDADE: <span className="text-white text-sm ml-0.5">{stats.currentCycle}</span>
           </h1>
-          <span className="text-[10px] font-mono text-purple-300 bg-purple-950/80 border border-purple-500/50 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(168,85,247,0.3)] font-bold">
-            FASE 8: A FORJA DA ALMA
+          <span className="text-[10px] font-mono text-cyan-300 bg-cyan-950/80 border border-cyan-500/50 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(6,182,212,0.3)] font-bold">
+            FASE 9: A SINERGIA
           </span>
         </div>
 
@@ -79,6 +84,36 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
             <span className="text-[9px] text-slate-400 font-normal">Dust</span>
           </div>
         </div>
+
+        {/* Phase 9: ACTIVE BOONS (Bênçãos Temporárias da Run) */}
+        {stats.gameState === 'PLAYING' && activeBoonsList.length > 0 && (
+          <div className="rounded-lg border border-cyan-500/40 bg-gradient-to-r from-cyan-950/80 via-slate-900/90 to-sky-950/80 p-2 font-mono shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+            <div className="flex items-center justify-between text-[10px] font-bold text-cyan-300 mb-1.5">
+              <div className="flex items-center gap-1">
+                <Zap className="w-3 h-3 text-cyan-400 animate-pulse" />
+                <span>BÊNÇÃOS ATIVAS ({activeBoonsList.length}/4)</span>
+              </div>
+              <span className="text-[8.5px] text-slate-400 font-normal">Temporário na Run</span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {activeBoonsList.map((boon) => (
+                <div
+                  key={boon.id}
+                  className="flex items-center gap-1 rounded border px-1.5 py-0.5 text-[9.5px] font-bold shadow-sm"
+                  style={{
+                    color: boon.color,
+                    borderColor: `${boon.color}60`,
+                    backgroundColor: `${boon.color}15`,
+                  }}
+                  title={boon.description}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: boon.color }} />
+                  <span>{boon.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Sanctuary Mode Banner or Boss Tracker */}
         {stats.gameState === 'SANCTUARY' && (
@@ -225,6 +260,19 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
             </span>
           </div>
         </div>
+
+        {/* Proximity Alert if near an Altar of Echoes */}
+        {stats.nearbyAltar && stats.nearbyAltar.isActive && (
+          <div className="mt-1 flex items-center justify-between rounded-lg border border-cyan-400/80 bg-cyan-950/90 px-2.5 py-1.5 font-mono text-[11px] text-cyan-200 shadow-[0_0_15px_rgba(6,182,212,0.4)] animate-pulse">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-cyan-300 animate-spin" />
+              <span className="font-bold">ALTAR DE ECO PRÓXIMO!</span>
+            </div>
+            <span className="rounded bg-cyan-400 px-2 py-0.5 text-[9.5px] font-bold text-slate-950 shadow">
+              PRESSIONE E
+            </span>
+          </div>
+        )}
 
         {/* Proximity Alert if near an NPC */}
         {stats.nearbyNPC && (

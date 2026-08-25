@@ -1,6 +1,6 @@
 {
   "name": "VÉSPERA: A Tempestade de Vidro",
-  "description": "Motor 2D Top-Down para RPG/Roguelike Narrativo - Fase 8: O Santuário do Vazio e a Forja da Alma (Hub World estático, Meta-progresso estilo Hades com Kael e Pó de Memória, Resgate permanente de Lyra e Portal da Ruptura).",
+  "description": "Motor 2D Top-Down para RPG/Roguelike Narrativo - Fase 9: A Sinergia (Altares de Eco com Bênçãos Temporárias no estilo Hades, Novas Variantes de Inimigos - Caçador, Bruto e Atirador, Game Feel com Flash de Impacto e Recuo Cinético, Santuário do Vazio e Forja da Alma).",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

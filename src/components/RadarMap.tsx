@@ -1,5 +1,5 @@
 import React from 'react';
-import { WorldObstacle, RealityAnchor, NPC, Enemy, BossEnemy, VictoryItem } from '../types/game';
+import { WorldObstacle, RealityAnchor, NPC, Enemy, BossEnemy, VictoryItem, EchoAltar } from '../types/game';
 
 interface RadarMapProps {
   playerX: number;
@@ -10,6 +10,7 @@ interface RadarMapProps {
   enemies?: Enemy[];
   boss?: BossEnemy | null;
   victoryItem?: VictoryItem | null;
+  altars?: EchoAltar[];
   worldBounds: { minX: number; maxX: number; minY: number; maxY: number };
 }
 
@@ -22,6 +23,7 @@ export const RadarMap: React.FC<RadarMapProps> = ({
   enemies = [],
   boss = null,
   victoryItem = null,
+  altars = [],
   worldBounds,
 }) => {
   const mapSize = 140;
@@ -125,6 +127,23 @@ export const RadarMap: React.FC<RadarMapProps> = ({
               className="absolute w-2.5 h-2.5 -ml-[5px] -mt-[5px] rounded-full border border-white bg-amber-400 shadow-[0_0_8px_#FFD700] z-15 animate-pulse"
               style={{ left: `${nPos.x}px`, top: `${nPos.y}px` }}
               title={`NPC: ${npc.name}`}
+            />
+          );
+        })}
+
+        {/* Phase 9: Echo Altars (Cyan Obelisks) on Radar */}
+        {altars.map((altar) => {
+          const alPos = toRadar(altar.x, altar.y);
+          return (
+            <div
+              key={`radar-altar-${altar.id}`}
+              className={`absolute w-2 h-2 -ml-1 -mt-1 border ${
+                altar.isActive
+                  ? 'border-cyan-200 bg-cyan-400 shadow-[0_0_8px_#00FFFF] animate-pulse z-15'
+                  : 'border-slate-600 bg-slate-800 z-10'
+              }`}
+              style={{ left: `${alPos.x}px`, top: `${alPos.y}px` }}
+              title={`Altar de Eco #${altar.id} ${altar.isActive ? '(Ativo)' : '(Exaurido)'}`}
             />
           );
         })}

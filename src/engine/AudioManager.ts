@@ -426,4 +426,131 @@ export class AudioManager {
       console.warn('Error playing portal warp sound:', e);
     }
   }
+
+  /**
+   * BOON SELECT SOUND (Phase 9):
+   * Sparkling ethereal divine chord arpeggio
+   */
+  public playBoonSelect(): void {
+    if (this.isMuted || !this.ctx || this.ctx.state !== 'running') return;
+
+    try {
+      const now = this.ctx.currentTime;
+      // F# minor pentatonic celestial shimmer (587.33, 739.99, 880.00, 1174.66, 1479.98)
+      const frequencies = [587.33, 739.99, 880.0, 1174.66, 1479.98];
+
+      frequencies.forEach((freq, idx) => {
+        const noteStart = now + idx * 0.055;
+        const osc = this.ctx!.createOscillator();
+        const gain = this.ctx!.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, noteStart);
+
+        gain.gain.setValueAtTime(0.01, noteStart);
+        gain.gain.linearRampToValueAtTime(0.18, noteStart + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, noteStart + 0.55);
+
+        osc.connect(gain);
+        gain.connect(this.ctx!.destination);
+
+        osc.start(noteStart);
+        osc.stop(noteStart + 0.55);
+      });
+    } catch (e) {
+      console.warn('Error playing boon select sound:', e);
+    }
+  }
+
+  /**
+   * GUNNER ENEMY SHOOT SOUND (Phase 9):
+   * Sharp retro laser ping / plasma pulse
+   */
+  public playGunnerShoot(): void {
+    if (this.isMuted || !this.ctx || this.ctx.state !== 'running') return;
+
+    try {
+      const now = this.ctx.currentTime;
+      const duration = 0.12;
+
+      const osc = this.ctx.createOscillator();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(800, now);
+      osc.frequency.exponentialRampToValueAtTime(150, now + duration);
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(2400, now);
+      filter.frequency.exponentialRampToValueAtTime(400, now + duration);
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + duration);
+    } catch (e) {
+      console.warn('Error playing gunner shoot sound:', e);
+    }
+  }
+
+  /**
+   * SHATTERING DASH IMPACT (Phase 9):
+   * Crisp crystal shatter impact when dash rams an enemy
+   */
+  public playShatterDash(): void {
+    if (this.isMuted || !this.ctx || this.ctx.state !== 'running') return;
+
+    try {
+      const now = this.ctx.currentTime;
+      const duration = 0.18;
+
+      // 1. Noise crunch
+      const bufferSize = Math.floor(this.ctx.sampleRate * duration);
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const output = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'highpass';
+      filter.frequency.setValueAtTime(1800, now);
+
+      const noiseGain = this.ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.25, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      noise.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(this.ctx.destination);
+
+      noise.start(now);
+      noise.stop(now + duration);
+
+      // 2. Bright glass ring
+      const osc = this.ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(1200, now);
+      osc.frequency.exponentialRampToValueAtTime(300, now + duration);
+
+      const oscGain = this.ctx.createGain();
+      oscGain.gain.setValueAtTime(0.2, now);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      osc.connect(oscGain);
+      oscGain.connect(this.ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + duration);
+    } catch (e) {
+      console.warn('Error playing shatter dash sound:', e);
+    }
+  }
 }

@@ -1,4 +1,4 @@
-import { WorldObstacle, BiomeType, RealityAnchor, NPC, Enemy, BossEnemy } from '../types/game';
+import { WorldObstacle, BiomeType, RealityAnchor, NPC, Enemy, BossEnemy, EchoAltar } from '../types/game';
 
 interface BiomeZone {
   type: BiomeType;
@@ -42,17 +42,58 @@ export class WorldGenerator {
       shootTimer: 0,
       ringRotation: 0,
       isDefeated: false,
+      flashTimer: 0,
     };
   }
 
   /**
-   * Generates ~30 Aberration enemies scattered across the world, outside the safe central area (>350px)
+   * Phase 9: Generates 4 to 6 Echo Altars (Altares de Eco) spread across the open world biomes
    */
-  public static generateEnemies(count: number = 30, existingAnchors: RealityAnchor[] = []): Enemy[] {
+  public static generateEchoAltars(count: number = 5, existingAnchors: RealityAnchor[] = []): EchoAltar[] {
+    const altars: EchoAltar[] = [];
+    const targetBiomeSectors: { angleMin: number; angleMax: number; distMin: number; distMax: number }[] = [
+      { angleMin: 3.5, angleMax: 4.5, distMin: 550, distMax: 1100 }, // Quartz Forest sector
+      { angleMin: 5.0, angleMax: 6.0, distMin: 550, distMax: 1100 }, // Chrono sector
+      { angleMin: 0.8, angleMax: 2.3, distMin: 550, distMax: 1200 }, // Crimson Desert sector
+      { angleMin: 2.5, angleMax: 3.4, distMin: 700, distMax: 1300 }, // West fringe
+      { angleMin: 0.1, angleMax: 0.7, distMin: 700, distMax: 1300 }, // East fringe
+    ];
+
+    for (let i = 0; i < count; i++) {
+      const sector = targetBiomeSectors[i % targetBiomeSectors.length];
+      const angle = sector.angleMin + Math.random() * (sector.angleMax - sector.angleMin);
+      const dist = sector.distMin + Math.random() * (sector.distMax - sector.distMin);
+      const x = Math.round(Math.cos(angle) * dist);
+      const y = Math.round(Math.sin(angle) * dist);
+      const biomeInfo = this.getBiomeAt(x, y);
+
+      altars.push({
+        id: 3000 + i,
+        x,
+        y,
+        radius: 24,
+        isActive: true,
+        pulsePhase: Math.random() * Math.PI * 2,
+        biome: biomeInfo.type,
+      });
+    }
+
+    return altars;
+  }
+
+  /**
+   * Phase 9: A Trindade de Inimigos (IA Híbrida e Tática)
+   * Spawns a balanced mix of 3 enemy variants:
+   * 1. Caçador (Hunter - Fast Melee Triangle)
+   * 2. Brutamontes (Brute - Giant Heavy Purple Square, 3x HP, Knockback Immune, Double Contact DMG)
+   * 3. Artilheiro (Gunner - Orange Diamond, Survival Kiting AI, Ranged Plasma Projectiles)
+   */
+  public static generateEnemies(count: number = 32, existingAnchors: RealityAnchor[] = []): Enemy[] {
     const enemies: Enemy[] = [];
     let attempts = 0;
 
-    while (enemies.length < count && attempts < 500) {
+    // Distribution: ~45% Hunters, ~28% Brutes, ~27% Gunners
+    while (enemies.length < count && attempts < 600) {
       attempts++;
       const x = Math.round((Math.random() - 0.5) * 3600); // -1800 to +1800
       const y = Math.round((Math.random() - 0.5) * 3600);
@@ -65,29 +106,85 @@ export class WorldGenerator {
 
       // Avoid placing right on top of another enemy
       const tooCloseToOtherEnemy = enemies.some(
-        (e) => Math.hypot(e.x - x, e.y - y) < 80
+        (e) => Math.hypot(e.x - x, e.y - y) < 90
       );
       if (tooCloseToOtherEnemy) {
         continue;
       }
 
-      enemies.push({
-        id: 2000 + enemies.length,
-        x,
-        y,
-        size: 22,
-        speed: 130 + Math.random() * 35, // 130 - 165 px/s
-        hp: 1,
-        maxHp: 1,
-        color: '#4c0519',
-        borderColor: '#f43f5e',
-        glowColor: '#e11d48',
-        aggroRadius: 300,
-        isAggro: false,
-        vx: 0,
-        vy: 0,
-        facingAngle: Math.random() * Math.PI * 2,
-      });
+      // Pick enemy type
+      const rand = Math.random();
+      if (rand < 0.45) {
+        // 1. CAÇADOR (Melee Hunter)
+        enemies.push({
+          id: 2000 + enemies.length,
+          type: 'hunter',
+          x,
+          y,
+          size: 22,
+          speed: 145 + Math.random() * 30, // 145 - 175 px/s
+          hp: 45,
+          maxHp: 45,
+          color: '#4c0519',
+          borderColor: '#f43f5e',
+          glowColor: '#e11d48',
+          aggroRadius: 320,
+          isAggro: false,
+          vx: 0,
+          vy: 0,
+          facingAngle: Math.random() * Math.PI * 2,
+          contactDamage: 20,
+          isImmuneKnockback: false,
+          flashTimer: 0,
+        });
+      } else if (rand < 0.73) {
+        // 2. BRUTAMONTES (Tank Brute)
+        enemies.push({
+          id: 2000 + enemies.length,
+          type: 'brute',
+          x,
+          y,
+          size: 44, // Giant purple square
+          speed: 60 + Math.random() * 15, // 60 - 75 px/s (slow)
+          hp: 150, // 3x health!
+          maxHp: 150,
+          color: '#3b0764',
+          borderColor: '#a855f7',
+          glowColor: '#7e22ce',
+          aggroRadius: 280,
+          isAggro: false,
+          vx: 0,
+          vy: 0,
+          facingAngle: Math.random() * Math.PI * 2,
+          contactDamage: 40, // Double contact damage!
+          isImmuneKnockback: true, // Immune to knockback!
+          flashTimer: 0,
+        });
+      } else {
+        // 3. ARTILHEIRO (Ranged Gunner)
+        enemies.push({
+          id: 2000 + enemies.length,
+          type: 'gunner',
+          x,
+          y,
+          size: 24, // Diamond
+          speed: 115 + Math.random() * 20, // 115 - 135 px/s
+          hp: 40,
+          maxHp: 40,
+          color: '#7c2d12',
+          borderColor: '#fb923c',
+          glowColor: '#f97316',
+          aggroRadius: 420,
+          isAggro: false,
+          vx: 0,
+          vy: 0,
+          facingAngle: Math.random() * Math.PI * 2,
+          contactDamage: 15,
+          isImmuneKnockback: false,
+          shootTimer: Math.random() * 2.0, // Staggered initial shot timing
+          flashTimer: 0,
+        });
+      }
     }
 
     return enemies;

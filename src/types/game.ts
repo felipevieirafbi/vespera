@@ -1,6 +1,30 @@
 export type BiomeType = 'quartz_forest' | 'chrono_ruins' | 'crimson_desert';
 export type GameState = 'MENU' | 'SANCTUARY' | 'PLAYING' | 'VICTORY';
 
+// Phase 9: Boons (Bênçãos Temporárias)
+export type BoonId = 'colossal_blade' | 'shattering_dash' | 'blood_siphon' | 'frenzy';
+
+export interface BoonInfo {
+  id: BoonId;
+  name: string;
+  subtitle: string;
+  description: string;
+  iconName: string;
+  color: string;
+  borderColor: string;
+  badge: string;
+}
+
+export interface EchoAltar {
+  id: number;
+  x: number;
+  y: number;
+  radius: number; // 24px
+  isActive: boolean;
+  pulsePhase: number;
+  biome: BiomeType;
+}
+
 export interface PlayerUpgrades {
   vitalityLevel: number; // +20 HP per level (cost: 50)
   damageLevel: number;   // +15 Damage per level (cost: 75)
@@ -39,6 +63,7 @@ export interface PlayerTrailPoint {
   alpha: number;
   angle: number;
   isDash?: boolean;
+  color?: string;
 }
 
 export interface Player {
@@ -50,18 +75,23 @@ export interface Player {
   vx: number;
   vy: number;
   facingAngle: number;
-  // Combat & Survivability (Phase 6)
+  // Combat & Survivability (Phase 6 & 9)
   hp: number;
   maxHp: number;
   isDashing: boolean;
-  dashTimer: number; // in seconds (e.g. 0.15s)
+  dashTimer: number; // in seconds (e.g. 0.2s)
   dashCooldown: number; // in seconds (e.g. 1.0s max)
   attackCooldown: number; // in seconds (e.g. 0.3s max)
   invulnerabilityTimer: number; // in seconds (e.g. 0.5s after damage)
+  flashTimer: number; // Hit flash (white frame)
+  activeBoons: BoonId[];
 }
+
+export type EnemyType = 'hunter' | 'brute' | 'gunner';
 
 export interface Enemy {
   id: number;
+  type: EnemyType;
   x: number;
   y: number;
   size: number;
@@ -71,11 +101,15 @@ export interface Enemy {
   color: string;
   borderColor: string;
   glowColor: string;
-  aggroRadius: number; // 300px
+  aggroRadius: number; // 300-420px
   isAggro: boolean;
   vx: number;
   vy: number;
   facingAngle: number;
+  contactDamage: number;
+  isImmuneKnockback?: boolean;
+  shootTimer?: number;
+  flashTimer?: number;
 }
 
 // Phase 7: Boss - O Senhor do Fragmento
@@ -98,19 +132,22 @@ export interface BossEnemy {
   shootTimer: number; // Fires every 2.0s
   ringRotation: number;
   isDefeated: boolean;
+  flashTimer?: number;
 }
 
-// Phase 7: Boss Crimson Spread Projectiles
+// Phase 7 & 9: Projectiles (Boss & Gunner)
 export interface BossProjectile {
   id: number;
   x: number;
   y: number;
   vx: number;
   vy: number;
-  radius: number; // 7px
+  radius: number; // 6-7px
   color: string;
   life: number;
   maxLife: number; // 4.0s
+  damage?: number;
+  source?: 'boss' | 'gunner';
 }
 
 // Phase 7: Victory Item - Coração do Caleidoscópio
@@ -141,8 +178,8 @@ export interface SlashAttack {
   startX: number;
   startY: number;
   angle: number;
-  radius: number; // 75px sweep reach
-  arcAngle: number; // e.g. 2.4 radians (~140 deg)
+  radius: number; // 75-120px sweep reach
+  arcAngle: number; // e.g. 2.4 - 3.8 radians
   timer: number;
   duration: number; // 0.15s (150ms)
 }
@@ -205,6 +242,7 @@ export interface EngineStats {
   collidingX: boolean;
   collidingY: boolean;
   nearbyNPC: NPC | null;
+  nearbyAltar: EchoAltar | null;
   memoryTears: number;
   awakenedNPCsCount: number;
   // Phase 8 Meta-Progression & Sanctuary Hub
@@ -228,6 +266,8 @@ export interface EngineStats {
   bossDistance: number;
   bossAggro: boolean;
   victoryItemSpawned: boolean;
+  // Phase 9 Boons (Bênçãos Ativas)
+  activeBoons: BoonId[];
 }
 
 export interface EngineConfig {
