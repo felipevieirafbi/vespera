@@ -1,5 +1,11 @@
 export type BiomeType = 'quartz_forest' | 'chrono_ruins' | 'crimson_desert';
-export type GameState = 'MENU' | 'PLAYING' | 'VICTORY';
+export type GameState = 'MENU' | 'SANCTUARY' | 'PLAYING' | 'VICTORY';
+
+export interface PlayerUpgrades {
+  vitalityLevel: number; // +20 HP per level (cost: 50)
+  damageLevel: number;   // +15 Damage per level (cost: 75)
+  dashLevel: number;     // -0.15s cooldown per level (cost: 50)
+}
 
 export interface Vector2D {
   x: number;
@@ -201,6 +207,12 @@ export interface EngineStats {
   nearbyNPC: NPC | null;
   memoryTears: number;
   awakenedNPCsCount: number;
+  // Phase 8 Meta-Progression & Sanctuary Hub
+  memoryDust: number;
+  gameState: GameState;
+  upgrades: PlayerUpgrades;
+  lyraRescued: boolean;
+  inPortalZone: boolean;
   // Phase 6 Combat Stats
   hp: number;
   maxHp: number;

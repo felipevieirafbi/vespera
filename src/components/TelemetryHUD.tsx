@@ -62,13 +62,39 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
             <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
             CICLO DE REALIDADE: <span className="text-white text-sm ml-0.5">{stats.currentCycle}</span>
           </h1>
-          <span className="text-[10px] font-mono text-cyan-300 bg-cyan-950/80 border border-cyan-500/50 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(6,182,212,0.3)] font-bold">
-            FASE 7: O ENCANTO FINAL
+          <span className="text-[10px] font-mono text-purple-300 bg-purple-950/80 border border-purple-500/50 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(168,85,247,0.3)] font-bold">
+            FASE 8: A FORJA DA ALMA
           </span>
         </div>
 
+        {/* Phase 8: PÓ DE MEMÓRIA (Meta-Currency Banner) */}
+        <div className="flex items-center justify-between rounded-lg border border-purple-500/40 bg-gradient-to-r from-purple-950/70 via-slate-900/80 to-purple-950/70 px-2.5 py-1.5 font-mono shadow-[0_0_15px_rgba(168,85,247,0.2)]">
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-purple-400 animate-spin" style={{ animationDuration: '6s' }} />
+            <span className="text-[11px] font-bold text-purple-300">PÓ DE MEMÓRIA:</span>
+          </div>
+          <div className="flex items-center gap-1 font-bold text-xs text-purple-200">
+            <span className="text-purple-400">✦</span>
+            <span>{stats.memoryDust ?? 0}</span>
+            <span className="text-[9px] text-slate-400 font-normal">Dust</span>
+          </div>
+        </div>
+
+        {/* Sanctuary Mode Banner or Boss Tracker */}
+        {stats.gameState === 'SANCTUARY' && (
+          <div className="rounded-lg border border-indigo-500/50 bg-indigo-950/80 p-2 font-mono text-[11px] text-indigo-200 shadow-[0_0_15px_rgba(99,102,241,0.25)]">
+            <div className="flex items-center justify-between font-bold mb-0.5">
+              <span className="text-indigo-300">🏛️ O SANTUÁRIO DO VAZIO</span>
+              <span className="text-[9px] bg-indigo-500/30 text-indigo-200 px-1.5 py-0.5 rounded border border-indigo-400/40">ZONA SEGURA</span>
+            </div>
+            <p className="text-[9.5px] text-slate-400">
+              Fale com <strong className="text-rose-300">Kael</strong> para a Forja da Alma ou atravesse o <strong className="text-cyan-300">Portal ao Norte</strong> para iniciar a Run.
+            </p>
+          </div>
+        )}
+
         {/* Phase 7: BOSS HEALTH & RADAR TRACKER */}
-        {stats.bossAlive && (
+        {stats.gameState === 'PLAYING' && stats.bossAlive && (
           <div className={`rounded-lg border p-2 font-mono transition-all ${
             stats.bossAggro
               ? 'border-rose-500 bg-rose-950/80 shadow-[0_0_15px_rgba(244,63,94,0.35)]'

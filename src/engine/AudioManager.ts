@@ -310,4 +310,120 @@ export class AudioManager {
       console.warn('Error playing victory sound:', e);
     }
   }
+
+  /**
+   * MEMORY DUST COLLECT SOUND:
+   * Quick sparkling twin chime (E6 -> B6) with gentle crystal reverb feel
+   */
+  public playDustCollect(): void {
+    if (this.isMuted || !this.ctx || this.ctx.state !== 'running') return;
+
+    try {
+      const now = this.ctx.currentTime;
+      const freqs = [1318.51, 1975.53]; // E6, B6
+
+      freqs.forEach((freq, idx) => {
+        const noteStart = now + idx * 0.04;
+        const osc = this.ctx!.createOscillator();
+        const gain = this.ctx!.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, noteStart);
+
+        gain.gain.setValueAtTime(0.01, noteStart);
+        gain.gain.linearRampToValueAtTime(0.12, noteStart + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, noteStart + 0.22);
+
+        osc.connect(gain);
+        gain.connect(this.ctx!.destination);
+
+        osc.start(noteStart);
+        osc.stop(noteStart + 0.22);
+      });
+    } catch (e) {
+      console.warn('Error playing dust sound:', e);
+    }
+  }
+
+  /**
+   * FORGE UPGRADE PURCHASE SOUND:
+   * Heavy resonant metallic chime + ethereal soul resonance (Anvil impact)
+   */
+  public playUpgradeBuy(): void {
+    if (this.isMuted || !this.ctx || this.ctx.state !== 'running') return;
+
+    try {
+      const now = this.ctx.currentTime;
+
+      // 1. Anvil strike strike (square + lowpass)
+      const anvil = this.ctx.createOscillator();
+      anvil.type = 'triangle';
+      anvil.frequency.setValueAtTime(440, now);
+      anvil.frequency.exponentialRampToValueAtTime(110, now + 0.3);
+
+      const anvilGain = this.ctx.createGain();
+      anvilGain.gain.setValueAtTime(0.3, now);
+      anvilGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+      anvil.connect(anvilGain);
+      anvilGain.connect(this.ctx.destination);
+
+      anvil.start(now);
+      anvil.stop(now + 0.35);
+
+      // 2. Cosmic shimmer resonance
+      const notes = [659.25, 830.61, 987.77, 1318.51]; // E major chord
+      notes.forEach((freq, idx) => {
+        const noteStart = now + 0.05 + idx * 0.06;
+        const osc = this.ctx!.createOscillator();
+        const gain = this.ctx!.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, noteStart);
+
+        gain.gain.setValueAtTime(0.01, noteStart);
+        gain.gain.linearRampToValueAtTime(0.15, noteStart + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, noteStart + 0.6);
+
+        osc.connect(gain);
+        gain.connect(this.ctx!.destination);
+
+        osc.start(noteStart);
+        osc.stop(noteStart + 0.6);
+      });
+    } catch (e) {
+      console.warn('Error playing upgrade sound:', e);
+    }
+  }
+
+  /**
+   * PORTAL WARP SOUND:
+   * Upward frequency glide sweep into space
+   */
+  public playPortalWarp(): void {
+    if (this.isMuted || !this.ctx || this.ctx.state !== 'running') return;
+
+    try {
+      const now = this.ctx.currentTime;
+      const duration = 0.55;
+
+      const osc = this.ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(220, now);
+      osc.frequency.exponentialRampToValueAtTime(1760, now + duration);
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.01, now);
+      gain.gain.linearRampToValueAtTime(0.25, now + duration * 0.7);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + duration);
+    } catch (e) {
+      console.warn('Error playing portal warp sound:', e);
+    }
+  }
 }

@@ -1,6 +1,6 @@
 {
   "name": "VÉSPERA: A Tempestade de Vidro",
-  "description": "Motor 2D Top-Down para RPG/Roguelike - Fase 7: O Encanto Final (Chefão O Senhor do Fragmento, Áudio Procedural Web Audio API, Menus, Hit Stop e Vitória Canônica com o Coração do Caleidoscópio).",
+  "description": "Motor 2D Top-Down para RPG/Roguelike Narrativo - Fase 8: O Santuário do Vazio e a Forja da Alma (Hub World estático, Meta-progresso estilo Hades com Kael e Pó de Memória, Resgate permanente de Lyra e Portal da Ruptura).",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -94,19 +94,126 @@ export class WorldGenerator {
   }
 
   /**
-   * Generates 3 fixed named NPCs placed safely across each of the 3 biomes
+   * Generates Sanctuary Hub static architecture obstacles (Celestial pillars, altar perimeter, braziers)
    */
-  public static generateNPCs(existingAnchors: RealityAnchor[] = []): NPC[] {
+  public static generateSanctuaryObstacles(): WorldObstacle[] {
+    const obstacles: WorldObstacle[] = [];
+    let idCounter = 1;
+
+    // Outer Sanctuary Boundary Wall Pillars (-420 to +420)
+    const perimeterPillars = [
+      // Top Wall (Leaving opening for Portal at x: -60 to 60, y: -250)
+      { x: -360, y: -340, w: 40, h: 40 },
+      { x: -260, y: -340, w: 40, h: 40 },
+      { x: -160, y: -340, w: 40, h: 40 },
+      { x: 160, y: -340, w: 40, h: 40 },
+      { x: 260, y: -340, w: 40, h: 40 },
+      { x: 360, y: -340, w: 40, h: 40 },
+
+      // Bottom Wall
+      { x: -360, y: 340, w: 40, h: 40 },
+      { x: -240, y: 340, w: 40, h: 40 },
+      { x: -120, y: 340, w: 40, h: 40 },
+      { x: 0, y: 340, w: 40, h: 40 },
+      { x: 120, y: 340, w: 40, h: 40 },
+      { x: 240, y: 340, w: 40, h: 40 },
+      { x: 360, y: 340, w: 40, h: 40 },
+
+      // Left Wall
+      { x: -380, y: -240, w: 40, h: 40 },
+      { x: -380, y: -120, w: 40, h: 40 },
+      { x: -380, y: 0, w: 40, h: 40 },
+      { x: -380, y: 120, w: 40, h: 40 },
+      { x: -380, y: 240, w: 40, h: 40 },
+
+      // Right Wall
+      { x: 380, y: -240, w: 40, h: 40 },
+      { x: 380, y: -120, w: 40, h: 40 },
+      { x: 380, y: 0, w: 40, h: 40 },
+      { x: 380, y: 120, w: 40, h: 40 },
+      { x: 380, y: 240, w: 40, h: 40 },
+
+      // Decorative Inner Pillars framing Portal & Altars
+      { x: -90, y: -260, w: 32, h: 32 },
+      { x: 90, y: -260, w: 32, h: 32 },
+      { x: -220, y: -80, w: 32, h: 32 },
+      { x: 220, y: -80, w: 32, h: 32 },
+      { x: -140, y: 120, w: 28, h: 28 },
+      { x: 140, y: 120, w: 28, h: 28 },
+    ];
+
+    for (const p of perimeterPillars) {
+      obstacles.push({
+        id: idCounter++,
+        x: p.x,
+        y: p.y,
+        width: p.w,
+        height: p.h,
+        biome: 'chrono_ruins',
+        color: '#1e1b4b',
+        borderColor: '#818cf8',
+        glowColor: '#6366f1',
+        name: 'Pilar do Santuário',
+      });
+    }
+
+    return obstacles;
+  }
+
+  /**
+   * Generates NPCs inside the Sanctuary Hub
+   */
+  public static generateSanctuaryNPCs(lyraRescued: boolean = false): NPC[] {
+    const npcs: NPC[] = [
+      {
+        id: 'npc_kael',
+        name: 'Kael, o Forjador',
+        title: 'Forjador de Almas',
+        x: -180,
+        y: -40,
+        radius: 18,
+        color: '#fb7185', // Warm crimson forge master
+        biome: 'crimson_desert',
+      },
+      {
+        id: 'npc_orion',
+        name: 'Orion, o Sábio',
+        title: 'Astrônomo do Vazio',
+        x: 180,
+        y: -40,
+        radius: 18,
+        color: '#38bdf8', // Starlight celestial blue
+        biome: 'quartz_forest',
+      },
+    ];
+
+    // If Lyra has been rescued from the dangerous temporal ruins, she resides in the sanctuary!
+    if (lyraRescued) {
+      npcs.push({
+        id: 'npc_lyra',
+        name: 'Lyra, a Maga',
+        title: 'Guardiã Resgatada',
+        x: 0,
+        y: 150,
+        radius: 18,
+        color: '#c084fc', // Radiant purple starlight
+        biome: 'chrono_ruins',
+      });
+    }
+
+    return npcs;
+  }
+
+  /**
+   * Generates fixed named NPCs placed safely across each of the 3 biomes in open world.
+   * If Lyra was already rescued, she no longer spawns in the procedural open world.
+   */
+  public static generateNPCs(existingAnchors: RealityAnchor[] = [], lyraRescued: boolean = false): NPC[] {
     // Generate safe positions near the heart of each biome with slight procedural offset
     const orionOffsetAngle = Math.random() * Math.PI * 2;
     const orionDist = Math.random() * 200 + 150;
     const orionX = Math.round(-900 + Math.cos(orionOffsetAngle) * orionDist);
     const orionY = Math.round(-900 + Math.sin(orionOffsetAngle) * orionDist);
-
-    const lyraOffsetAngle = Math.random() * Math.PI * 2;
-    const lyraDist = Math.random() * 200 + 150;
-    const lyraX = Math.round(950 + Math.cos(lyraOffsetAngle) * lyraDist);
-    const lyraY = Math.round(-850 + Math.sin(lyraOffsetAngle) * lyraDist);
 
     const kaelOffsetAngle = Math.random() * Math.PI * 2;
     const kaelDist = Math.random() * 200 + 150;
@@ -125,16 +232,6 @@ export class WorldGenerator {
         biome: 'quartz_forest',
       },
       {
-        id: 'npc_lyra',
-        name: 'Lyra, a Maga',
-        title: 'Guardiã do Tempo',
-        x: lyraX,
-        y: lyraY,
-        radius: 18,
-        color: '#FFD700',
-        biome: 'chrono_ruins',
-      },
-      {
         id: 'npc_kael',
         name: 'Kael, o Ferreiro',
         title: 'Forjador Carmesim',
@@ -145,6 +242,25 @@ export class WorldGenerator {
         biome: 'crimson_desert',
       },
     ];
+
+    // Only spawn Lyra in open world if she hasn't been rescued yet
+    if (!lyraRescued) {
+      const lyraOffsetAngle = Math.random() * Math.PI * 2;
+      const lyraDist = Math.random() * 200 + 150;
+      const lyraX = Math.round(950 + Math.cos(lyraOffsetAngle) * lyraDist);
+      const lyraY = Math.round(-850 + Math.sin(lyraOffsetAngle) * lyraDist);
+
+      npcs.push({
+        id: 'npc_lyra',
+        name: 'Lyra, a Maga',
+        title: 'Guardiã do Tempo (Perdida)',
+        x: lyraX,
+        y: lyraY,
+        radius: 18,
+        color: '#FFD700',
+        biome: 'chrono_ruins',
+      });
+    }
 
     return npcs;
   }

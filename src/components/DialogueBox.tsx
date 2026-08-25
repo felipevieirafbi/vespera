@@ -39,17 +39,43 @@ export const DialogueBox: React.FC<DialogueBoxProps> = ({
     }
   };
 
-  // Determine dialogue text based on memory state
+  // Determine dialogue text based on NPC identity, cycle, and memory state
   let dialogueContent = '';
-  if (justAwakened) {
-    dialogueContent = 'Um lampejo... eu consigo ver! Minha mente está protegida. Eu me lembrarei de você, Anomalia!';
-  } else if (!isAwakened) {
-    dialogueContent = 'Quem é você? O Caleidoscópio gira e minha mente dói... Não te conheço, forasteiro.';
-  } else {
-    if (currentCycle > 1) {
-      dialogueContent = 'Você voltou! O mundo foi destruído e reconstruído, todos esqueceram de tudo, mas eu lembro de você!';
+  if (npc.id === 'npc_orion') {
+    if (currentCycle <= 1) {
+      dialogueContent =
+        'Você despertou, Anomalia. O Caleidoscópio quebrou. Atravesse o portal e traga o Pó de Memória das aberrações.';
+    } else if (currentCycle >= 2 && currentCycle <= 4) {
+      dialogueContent =
+        'A morte não pode te segurar. O tempo lá fora reescreveu suas regras, mas nós estamos seguros aqui. Fortaleça-se.';
     } else {
-      dialogueContent = 'Minha mente está protegida através do Caleidoscópio. Eu me lembrarei de você quando a Ruptura vier!';
+      dialogueContent =
+        'Os Senhores do Fragmento estão sentindo sua presença. O labirinto lá fora ficará cruel.';
+    }
+  } else if (npc.id === 'npc_kael') {
+    dialogueContent =
+      'Traga-me o Pó de Memória arrancado das Aberrações. Forjarei sua própria alma para resistir aos próximos ciclos na Forja da Alma.';
+  } else if (npc.id === 'npc_lyra') {
+    if (justAwakened) {
+      dialogueContent =
+        'Um lampejo... eu consigo ver! Você me salvou do esquecimento! Nos encontraremos no Santuário quando este ciclo se findar.';
+    } else if (isAwakened) {
+      dialogueContent =
+        'Você me salvou do esquecimento eterno! O fluxo do tempo lá fora é enlouquecedor. Que o eco da minha magia fortaleça sua jornada.';
+    } else {
+      dialogueContent =
+        'Quem é você? O Caleidoscópio gira e minha mente dói... Não te conheço, forasteiro.';
+    }
+  } else {
+    if (justAwakened) {
+      dialogueContent =
+        'Um lampejo... eu consigo ver! Minha mente está protegida. Eu me lembrarei de você, Anomalia!';
+    } else if (!isAwakened) {
+      dialogueContent =
+        'Quem é você? O Caleidoscópio gira e minha mente dói... Não te conheço, forasteiro.';
+    } else {
+      dialogueContent =
+        'Minha mente está protegida através do Caleidoscópio. Eu me lembrarei de você quando a Ruptura vier!';
     }
   }
 
