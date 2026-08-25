@@ -14,6 +14,17 @@ export interface RealityAnchor {
   color: string;
 }
 
+export interface NPC {
+  id: string; // 'npc_orion' | 'npc_lyra' | 'npc_kael'
+  name: string; // 'Orion, o Sábio' | 'Lyra, a Maga' | 'Kael, o Ferreiro'
+  title: string;
+  x: number;
+  y: number;
+  radius: number; // 18px
+  color: string; // #FFD700
+  biome: BiomeType;
+}
+
 export interface PlayerTrailPoint {
   x: number;
   y: number;
@@ -78,6 +89,9 @@ export interface EngineStats {
   totalObstacles: number;
   collidingX: boolean;
   collidingY: boolean;
+  nearbyNPC: NPC | null;
+  memoryTears: number;
+  awakenedNPCsCount: number;
 }
 
 export interface EngineConfig {

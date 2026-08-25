@@ -1,4 +1,4 @@
-import { WorldObstacle, BiomeType, RealityAnchor } from '../types/game';
+import { WorldObstacle, BiomeType, RealityAnchor, NPC } from '../types/game';
 
 interface BiomeZone {
   type: BiomeType;
@@ -13,6 +13,61 @@ interface BiomeZone {
 }
 
 export class WorldGenerator {
+  /**
+   * Generates 3 fixed named NPCs placed safely across each of the 3 biomes
+   */
+  public static generateNPCs(existingAnchors: RealityAnchor[] = []): NPC[] {
+    // Generate safe positions near the heart of each biome with slight procedural offset
+    const orionOffsetAngle = Math.random() * Math.PI * 2;
+    const orionDist = Math.random() * 200 + 150;
+    const orionX = Math.round(-900 + Math.cos(orionOffsetAngle) * orionDist);
+    const orionY = Math.round(-900 + Math.sin(orionOffsetAngle) * orionDist);
+
+    const lyraOffsetAngle = Math.random() * Math.PI * 2;
+    const lyraDist = Math.random() * 200 + 150;
+    const lyraX = Math.round(950 + Math.cos(lyraOffsetAngle) * lyraDist);
+    const lyraY = Math.round(-850 + Math.sin(lyraOffsetAngle) * lyraDist);
+
+    const kaelOffsetAngle = Math.random() * Math.PI * 2;
+    const kaelDist = Math.random() * 200 + 150;
+    const kaelX = Math.round(0 + Math.cos(kaelOffsetAngle) * kaelDist);
+    const kaelY = Math.round(950 + Math.sin(kaelOffsetAngle) * kaelDist);
+
+    const npcs: NPC[] = [
+      {
+        id: 'npc_orion',
+        name: 'Orion, o Sábio',
+        title: 'O Astrônomo do Quartzo',
+        x: orionX,
+        y: orionY,
+        radius: 18,
+        color: '#FFD700',
+        biome: 'quartz_forest',
+      },
+      {
+        id: 'npc_lyra',
+        name: 'Lyra, a Maga',
+        title: 'Guardiã do Tempo',
+        x: lyraX,
+        y: lyraY,
+        radius: 18,
+        color: '#FFD700',
+        biome: 'chrono_ruins',
+      },
+      {
+        id: 'npc_kael',
+        name: 'Kael, o Ferreiro',
+        title: 'Forjador Carmesim',
+        x: kaelX,
+        y: kaelY,
+        radius: 18,
+        color: '#FFD700',
+        biome: 'crimson_desert',
+      },
+    ];
+
+    return npcs;
+  }
   /**
    * Helper to check if a coordinate falls inside any active Reality Anchor's 450px Stability Field
    */

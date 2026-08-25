@@ -1,4 +1,4 @@
-import { Player, WorldObstacle, DustParticle, PlayerTrailPoint, EngineStats, EngineConfig, RealityAnchor } from '../types/game';
+import { Player, WorldObstacle, DustParticle, PlayerTrailPoint, EngineStats, EngineConfig, RealityAnchor, NPC } from '../types/game';
 import { VirtualCamera } from './Camera';
 import { InputManager } from './InputManager';
 import { WorldGenerator } from './WorldGenerator';
@@ -19,10 +19,20 @@ export class GameEngine {
   public particles: DustParticle[] = [];
   public playerTrail: PlayerTrailPoint[] = [];
 
+  // Living Entities (Phase 5 - NPCs)
+  public npcs: NPC[] = [];
+  public nearbyNPC: NPC | null = null;
+  public isDialogueOpen: boolean = false;
+  public onOpenDialogue?: (npc: NPC) => void;
+
   // Reality Anchors (Phase 4)
   public anchors: RealityAnchor[] = [];
   public availablePrisms: number = 3;
   public preservedObstaclesCount: number = 0;
+
+  // Soul Metaprogress
+  public memoryTears: number = 1;
+  public awakenedNPCsCount: number = 0;
 
   public config: EngineConfig = {
     gridSize: 80,
@@ -65,6 +75,9 @@ export class GameEngine {
     totalObstacles: 300,
     collidingX: false,
     collidingY: false,
+    nearbyNPC: null,
+    memoryTears: 1,
+    awakenedNPCsCount: 0,
   };
 
   private frameCount: number = 0;
@@ -72,7 +85,11 @@ export class GameEngine {
   private trailTimer: number = 0;
   private onStatsUpdate?: (stats: EngineStats) => void;
 
-  constructor(canvas: HTMLCanvasElement, onStatsUpdate?: (stats: EngineStats) => void) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    onStatsUpdate?: (stats: EngineStats) => void,
+    onOpenDialogue?: (npc: NPC) => void
+  ) {
     this.canvas = canvas;
     const context = canvas.getContext('2d', { alpha: false });
     if (!context) {
@@ -80,6 +97,7 @@ export class GameEngine {
     }
     this.ctx = context;
     this.onStatsUpdate = onStatsUpdate;
+    this.onOpenDialogue = onOpenDialogue;
 
     this.camera = new VirtualCamera(0, 0);
     this.inputManager = new InputManager();
@@ -103,7 +121,28 @@ export class GameEngine {
   public forceRupture(): void {
     if (this.ruptureState === 'idle') {
       this.ruptureState = 'collapsing';
+      this.setDialogueOpen(false);
     }
+  }
+
+  public setDialogueOpen(isOpen: boolean): void {
+    this.isDialogueOpen = isOpen;
+  }
+
+  public openDialogueForNearbyNPC(): void {
+    if (this.nearbyNPC && !this.isDialogueOpen && this.ruptureState === 'idle') {
+      this.isDialogueOpen = true;
+      if (this.onOpenDialogue) {
+        this.onOpenDialogue(this.nearbyNPC);
+      }
+    }
+  }
+
+  public updateNarrativeState(memoryTears: number, awakenedCount: number): void {
+    this.memoryTears = memoryTears;
+    this.awakenedNPCsCount = awakenedCount;
+    this.stats.memoryTears = memoryTears;
+    this.stats.awakenedNPCsCount = awakenedCount;
   }
 
   /**
@@ -111,7 +150,7 @@ export class GameEngine {
    * Radius: strict 450px Stability Field
    */
   public plantAnchor(): boolean {
-    if (this.availablePrisms <= 0 || this.ruptureState !== 'idle') {
+    if (this.availablePrisms <= 0 || this.ruptureState !== 'idle' || this.isDialogueOpen) {
       return false;
     }
 
@@ -132,10 +171,11 @@ export class GameEngine {
   }
 
   /**
-   * Initializes 300 procedural cluster obstacles across 3 Biomes
+   * Initializes 300 procedural cluster obstacles across 3 Biomes & 3 Living NPCs
    */
   public initWorld(): void {
     this.obstacles = WorldGenerator.generateBiomesAndObstacles(300, this.anchors);
+    this.npcs = WorldGenerator.generateNPCs(this.anchors);
     this.stats.totalObstacles = this.obstacles.length;
   }
 
@@ -274,6 +314,9 @@ export class GameEngine {
       this.stats.totalObstacles = this.obstacles.length;
       this.stats.preservedObstaclesCount = this.preservedObstaclesCount;
 
+      // FASE 5: Os NPCs renascem em novas posições aleatórias seguras no novo ciclo
+      this.npcs = WorldGenerator.generateNPCs(this.anchors);
+
       this.ruptureState = 'awakening';
     } else if (this.ruptureState === 'awakening') {
       this.shakeX = 0;
@@ -286,10 +329,33 @@ export class GameEngine {
       }
     }
 
+    // Check proximity to all NPCs (< 80px distance)
+    let closestNPC: NPC | null = null;
+    let minNPCDist = 80;
+    for (const npc of this.npcs) {
+      const dist = Math.hypot(npc.x - this.player.x, npc.y - this.player.y);
+      if (dist < minNPCDist) {
+        minNPCDist = dist;
+        closestNPC = npc;
+      }
+    }
+    this.nearbyNPC = closestNPC;
+    this.stats.nearbyNPC = closestNPC;
+
+    // Trigger dialogue interaction on Key E
+    if (
+      (this.inputManager.consumeKey('KeyE') || this.inputManager.consumeKey('e')) &&
+      this.nearbyNPC &&
+      !this.isDialogueOpen &&
+      this.ruptureState === 'idle'
+    ) {
+      this.openDialogueForNearbyNPC();
+    }
+
     let moveVector = this.inputManager.getMovementVector();
     
-    // Lock controls during rupture
-    if (this.ruptureState !== 'idle') {
+    // Lock controls during rupture or active dialogue
+    if (this.ruptureState !== 'idle' || this.isDialogueOpen) {
       moveVector = { x: 0, y: 0 };
     }
 
@@ -308,12 +374,14 @@ export class GameEngine {
 
     // ==========================================================
     // CRITICAL: AABB SLIDING COLLISION RESOLUTION (Separate X & Y)
+    // Supports solid obstacles + solid living NPCs
     // ==========================================================
     const collision = CollisionSystem.resolveMovement(
       this.player,
       dt,
       this.obstacles,
-      this.config.worldBounds
+      this.config.worldBounds,
+      this.npcs
     );
 
     this.player.x = collision.x;
@@ -416,6 +484,9 @@ export class GameEngine {
       }
     }
     this.stats.obstaclesInView = visibleObstacles;
+
+    // 5.5 Living Entities (Phase 5 - NPCs)
+    this.renderNPCs(ctx);
 
     // 6. Foreground Parallax Dust
     if (this.config.enableParticles) {
@@ -633,6 +704,80 @@ export class GameEngine {
       ctx.lineTo(anchor.x + dSize * 0.75, anchor.y);
       ctx.stroke();
 
+      ctx.restore();
+    }
+  }
+
+  /**
+   * Renders living NPCs as radiant Golden/Yellow circles (#FFD700) with strong glow
+   * and proximity interaction badges
+   */
+  private renderNPCs(ctx: CanvasRenderingContext2D): void {
+    if (this.npcs.length === 0) return;
+
+    for (const npc of this.npcs) {
+      if (!this.camera.isVisible(npc.x - 50, npc.y - 50, 100, 100, 100)) {
+        continue;
+      }
+
+      const dist = Math.hypot(npc.x - this.player.x, npc.y - this.player.y);
+      const isNearby = dist < 80;
+
+      ctx.save();
+
+      // Ambient outer interaction halo
+      if (dist < 140) {
+        ctx.strokeStyle = isNearby ? 'rgba(255, 215, 0, 0.45)' : 'rgba(255, 215, 0, 0.15)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.arc(npc.x, npc.y, 80, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Strong Golden Glow (#FFD700)
+      if (this.config.enableGlow) {
+        ctx.shadowColor = '#FFD700';
+        ctx.shadowBlur = isNearby ? 30 : 20;
+      }
+
+      // Outer Golden Body
+      ctx.fillStyle = npc.color || '#FFD700';
+      ctx.beginPath();
+      ctx.arc(npc.x, npc.y, npc.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Sharp white halo border
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Inner starlight white/gold core
+      ctx.fillStyle = '#FFFBEB';
+      ctx.beginPath();
+      ctx.arc(npc.x, npc.y, npc.radius * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+
+      // Text and Interaction Prompt above NPC
+      ctx.save();
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center';
+
+      if (isNearby) {
+        // Active interactive badge
+        ctx.fillStyle = '#FFD700';
+        ctx.fillText(`[E] ${npc.name}`, npc.x, npc.y - npc.radius - 12);
+
+        ctx.font = '9px monospace';
+        ctx.fillStyle = '#fef08a';
+        ctx.fillText(`"${npc.title}"`, npc.x, npc.y - npc.radius - 24);
+      } else {
+        ctx.fillStyle = 'rgba(255, 215, 0, 0.85)';
+        ctx.fillText(npc.name, npc.x, npc.y - npc.radius - 10);
+      }
       ctx.restore();
     }
   }

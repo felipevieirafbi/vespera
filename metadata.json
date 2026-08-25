@@ -1,6 +1,6 @@
 {
   "name": "VÉSPERA: A Tempestade de Vidro",
-  "description": "Motor 2D Top-Down para RPG/Roguelike - Fase 4: As Âncoras de Realidade (Prismas de Estabilidade). Sistema de persistência temporal em Roguelike de mundo aberto com campos de estabilidade de 450px.",
+  "description": "Motor 2D Top-Down para RPG/Roguelike - Fase 5: A Alma (NPCs, Sistema de Diálogos JRPG e Lágrimas da Lembrança). Sistema de persistência temporal e metaprogresso de almas despertas em Roguelike de mundo aberto.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -1,11 +1,12 @@
 import React from 'react';
-import { WorldObstacle, RealityAnchor } from '../types/game';
+import { WorldObstacle, RealityAnchor, NPC } from '../types/game';
 
 interface RadarMapProps {
   playerX: number;
   playerY: number;
   obstacles: WorldObstacle[];
   anchors?: RealityAnchor[];
+  npcs?: NPC[];
   worldBounds: { minX: number; maxX: number; minY: number; maxY: number };
 }
 
@@ -14,6 +15,7 @@ export const RadarMap: React.FC<RadarMapProps> = ({
   playerY,
   obstacles,
   anchors = [],
+  npcs = [],
   worldBounds,
 }) => {
   const mapSize = 140;
@@ -104,6 +106,19 @@ export const RadarMap: React.FC<RadarMapProps> = ({
               key={`radar-obs-${obs.id}-${idx}`}
               className={`absolute w-1 h-1 -ml-[2px] -mt-[2px] rounded-[0.5px] opacity-80 ${getObstacleColor(obs.biome)}`}
               style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
+            />
+          );
+        })}
+
+        {/* Living NPCs on Radar (Radiant Gold #FFD700) */}
+        {npcs.map((npc) => {
+          const nPos = toRadar(npc.x, npc.y);
+          return (
+            <div
+              key={`radar-npc-${npc.id}`}
+              className="absolute w-2.5 h-2.5 -ml-[5px] -mt-[5px] rounded-full border border-white bg-amber-400 shadow-[0_0_8px_#FFD700] z-15 animate-pulse"
+              style={{ left: `${nPos.x}px`, top: `${nPos.y}px` }}
+              title={`NPC: ${npc.name}`}
             />
           );
         })}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { EngineStats } from '../types/game';
-import { Activity, Compass, Cpu, Gauge, Zap, Shield, Sparkles, Gem, Anchor } from 'lucide-react';
+import { Activity, Compass, Cpu, Gauge, Zap, Shield, Sparkles, Gem, Anchor, Droplets, Users, MessageSquare } from 'lucide-react';
 
 interface TelemetryHUDProps {
   stats: EngineStats;
@@ -32,17 +32,17 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
             <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
             CICLO DE REALIDADE: <span className="text-white text-sm ml-0.5">{stats.currentCycle}</span>
           </h1>
-          <span className="text-[10px] font-mono text-cyan-400/80 bg-cyan-950/60 border border-cyan-500/30 px-1.5 py-0.5 rounded">
-            FASE 4: ÂNCORAS
+          <span className="text-[10px] font-mono text-amber-400/90 bg-amber-950/60 border border-amber-500/40 px-1.5 py-0.5 rounded">
+            FASE 5: A ALMA
           </span>
         </div>
 
-        {/* Prisms & Anchors Bar */}
-        <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-800 text-[11px] font-mono">
+        {/* Metaprogress Bar (Prisms, Anchors, Memory Tears, Awakened Souls) */}
+        <div className="grid grid-cols-4 gap-1 pt-1 border-t border-slate-800 text-[10.5px] font-mono">
           {/* Prisms Left */}
           <div className="flex items-center gap-1 bg-cyan-950/40 border border-cyan-500/30 rounded p-1 justify-center">
-            <Gem className={`w-3.5 h-3.5 ${stats.prismsLeft > 0 ? 'text-cyan-300 animate-pulse' : 'text-slate-600'}`} />
-            <span className="text-slate-400 text-[9.5px]">PRISMAS:</span>
+            <Gem className={`w-3 h-3 ${stats.prismsLeft > 0 ? 'text-cyan-300 animate-pulse' : 'text-slate-600'}`} />
+            <span className="text-slate-400 text-[9px]">PRISMA:</span>
             <span className={`font-bold ${stats.prismsLeft > 0 ? 'text-cyan-200' : 'text-slate-500'}`}>
               {stats.prismsLeft}
             </span>
@@ -50,18 +50,42 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
 
           {/* Placed Anchors */}
           <div className="flex items-center gap-1 bg-slate-900/60 border border-slate-800 rounded p-1 justify-center">
-            <Anchor className="w-3.5 h-3.5 text-amber-300" />
-            <span className="text-slate-400 text-[9.5px]">ÂNCO.:</span>
-            <span className="font-bold text-amber-200">{stats.anchorsCount}</span>
+            <Anchor className="w-3 h-3 text-cyan-300" />
+            <span className="text-slate-400 text-[9px]">ÂNCO.:</span>
+            <span className="font-bold text-cyan-200">{stats.anchorsCount}</span>
           </div>
 
-          {/* Preserved Obstacles */}
-          <div className="flex items-center gap-1 bg-slate-900/60 border border-slate-800 rounded p-1 justify-center">
-            <Shield className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-slate-400 text-[9.5px]">PRESERV:</span>
-            <span className="font-bold text-emerald-300">{stats.preservedObstaclesCount}</span>
+          {/* Memory Tears */}
+          <div className="flex items-center gap-1 bg-amber-950/40 border border-amber-500/30 rounded p-1 justify-center">
+            <Droplets className={`w-3 h-3 ${(stats.memoryTears || 0) > 0 ? 'text-cyan-300 fill-cyan-400 animate-pulse' : 'text-slate-600'}`} />
+            <span className="text-slate-400 text-[9px]">LÁGR.:</span>
+            <span className={`font-bold ${(stats.memoryTears || 0) > 0 ? 'text-cyan-200' : 'text-slate-500'}`}>
+              {stats.memoryTears || 0}
+            </span>
+          </div>
+
+          {/* Awakened NPCs */}
+          <div className="flex items-center gap-1 bg-amber-950/40 border border-amber-500/30 rounded p-1 justify-center">
+            <Users className="w-3 h-3 text-amber-400" />
+            <span className="text-slate-400 text-[9px]">ALMAS:</span>
+            <span className="font-bold text-amber-300">
+              {stats.awakenedNPCsCount || 0}/3
+            </span>
           </div>
         </div>
+
+        {/* Proximity Alert if near an NPC */}
+        {stats.nearbyNPC && (
+          <div className="mt-1 flex items-center justify-between rounded-lg border border-amber-400/70 bg-amber-950/80 px-2 py-1 font-mono text-[11px] text-amber-200 shadow-[0_0_12px_rgba(255,215,0,0.3)] animate-pulse">
+            <div className="flex items-center gap-1.5">
+              <MessageSquare className="h-3.5 w-3.5 text-amber-300" />
+              <span className="font-bold">NPC: {stats.nearbyNPC.name}</span>
+            </div>
+            <span className="rounded bg-amber-400 px-1.5 py-0.2 text-[9.5px] font-bold text-slate-950">
+              PRESSIONE E
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Primary Metrics Card */}
@@ -164,7 +188,7 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
       <div className="rounded-xl border border-slate-800/90 bg-slate-950/75 p-2 backdrop-blur-md">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-[9.5px] font-mono uppercase text-slate-400">Entrada Vetorial & Ações</span>
-          <span className="text-[9.5px] font-mono text-cyan-400/80">WASD / F (Prisma) / R (Ruptura)</span>
+          <span className="text-[9.5px] font-mono text-cyan-400/80">WASD / E (Falar) / F (Prisma) / R</span>
         </div>
 
         <div className="flex justify-center gap-1 font-mono text-xs select-none">
@@ -206,13 +230,22 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
           </div>
 
           {/* Shift Sprint key */}
-          <div className={`ml-1 px-1.5 h-8 flex items-center justify-center rounded border self-end text-[10px] transition-all ${
+          <div className={`ml-0.5 px-1.5 h-8 flex items-center justify-center rounded border self-end text-[10px] transition-all ${
             isKeyActive('shiftleft') || isKeyActive('shiftright') || isKeyActive('shift')
               ? 'border-amber-400 bg-amber-500/30 text-amber-200 shadow-[0_0_8px_#f59e0b]'
               : 'border-slate-800 bg-slate-900/60 text-slate-500'
           }`}>
             <Zap className="w-3 h-3 mr-0.5" />
             SHIFT
+          </div>
+
+          {/* E Talk Key */}
+          <div className={`w-8 h-8 flex items-center justify-center rounded border self-end font-bold transition-all ${
+            isKeyActive('e')
+              ? 'border-amber-300 bg-amber-500/50 text-white shadow-[0_0_12px_#FFD700]'
+              : 'border-amber-900/80 bg-amber-950/40 text-amber-400'
+          }`} title="Falar com NPC (Interagir)">
+            E
           </div>
 
           {/* F Plant Anchor key */}

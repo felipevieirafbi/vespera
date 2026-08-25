@@ -1,5 +1,6 @@
 import React from 'react';
-import { RotateCcw, ZoomIn, ZoomOut, Sparkles, Wind, Eye, SunDim, AlertTriangle, Gem } from 'lucide-react';
+import { RotateCcw, ZoomIn, ZoomOut, Sparkles, Wind, Eye, SunDim, AlertTriangle, Gem, MessageSquare } from 'lucide-react';
+import { NPC } from '../types/game';
 
 interface GameControlsOverlayProps {
   onResetPosition: () => void;
@@ -13,6 +14,8 @@ interface GameControlsOverlayProps {
   onToggleVignette: () => void;
   onForceRupture: () => void;
   onPlantAnchor: () => void;
+  onTalkNPC?: () => void;
+  nearbyNPC?: NPC | null;
   prismsLeft: number;
   enableGlow: boolean;
   enableTrail: boolean;
@@ -33,6 +36,8 @@ export const GameControlsOverlay: React.FC<GameControlsOverlayProps> = ({
   onToggleVignette,
   onForceRupture,
   onPlantAnchor,
+  onTalkNPC,
+  nearbyNPC,
   prismsLeft,
   enableGlow,
   enableTrail,
@@ -41,12 +46,29 @@ export const GameControlsOverlay: React.FC<GameControlsOverlayProps> = ({
   currentZoom,
 }) => {
   const canPlant = prismsLeft > 0;
+  const hasNearbyNPC = Boolean(nearbyNPC);
 
   return (
     <div
       id="game-controls-toolbar"
       className="flex flex-wrap items-center justify-center gap-1.5 rounded-2xl border border-cyan-500/20 bg-slate-950/85 p-2 backdrop-blur-md shadow-2xl shadow-cyan-950/30"
     >
+      {/* Talk to NPC Button (E) - Active only if near an NPC (<80px) */}
+      {hasNearbyNPC && (
+        <button
+          id="btn-talk-npc"
+          onClick={onTalkNPC}
+          className="flex items-center gap-1.5 rounded-lg border border-amber-400/90 bg-amber-950/90 px-3.5 py-1.5 text-xs font-bold font-mono text-amber-200 hover:bg-amber-900 hover:border-amber-300 active:scale-95 transition shadow-[0_0_15px_rgba(255,215,0,0.5)] cursor-pointer animate-pulse"
+          title={`Falar com ${nearbyNPC?.name} (Tecla E)`}
+        >
+          <MessageSquare className="w-3.5 h-3.5 text-amber-300" />
+          <span>FALAR (E)</span>
+          <span className="ml-0.5 text-[10px] px-1.5 py-0.5 rounded bg-black/40 text-amber-300 font-normal">
+            {nearbyNPC?.name?.split(',')[0]}
+          </span>
+        </button>
+      )}
+
       {/* Plant Reality Anchor Button (F) */}
       <button
         id="btn-plant-anchor"

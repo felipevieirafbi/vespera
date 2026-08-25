@@ -1,4 +1,4 @@
-import { Player, WorldObstacle } from '../types/game';
+import { Player, WorldObstacle, NPC } from '../types/game';
 
 export interface CollisionResult {
   x: number;
@@ -17,7 +17,8 @@ export class CollisionSystem {
     player: Player,
     dt: number,
     obstacles: WorldObstacle[],
-    worldBounds: { minX: number; maxX: number; minY: number; maxY: number }
+    worldBounds: { minX: number; maxX: number; minY: number; maxY: number },
+    npcs: NPC[] = []
   ): CollisionResult {
     const halfSize = player.size / 2;
     let newX = player.x;
@@ -26,9 +27,25 @@ export class CollisionSystem {
     let collidedY = false;
     let hitObs: WorldObstacle | undefined = undefined;
 
-    // Filter nearby obstacles only (broadphase optimization within 250px)
+    // Convert npcs to collidable obstacles format
+    const npcColliders: WorldObstacle[] = npcs.map((npc, idx) => ({
+      id: 90000 + idx,
+      x: npc.x,
+      y: npc.y,
+      width: npc.radius * 2,
+      height: npc.radius * 2,
+      biome: npc.biome,
+      color: '#FFD700',
+      borderColor: '#FFFBEB',
+      glowColor: '#FFD700',
+      name: npc.name,
+    }));
+
+    const allColliders = [...obstacles, ...npcColliders];
+
+    // Filter nearby obstacles only (broadphase optimization within 300px)
     const checkRadius = 300;
-    const nearbyObstacles = obstacles.filter(
+    const nearbyObstacles = allColliders.filter(
       (obs) => Math.hypot(obs.x - player.x, obs.y - player.y) < checkRadius + Math.max(obs.width, obs.height)
     );
 
