@@ -5,6 +5,15 @@ export interface Vector2D {
   y: number;
 }
 
+export interface RealityAnchor {
+  id: number;
+  x: number;
+  y: number;
+  radius: number; // Strict 450px
+  placedAtCycle: number;
+  color: string;
+}
+
 export interface PlayerTrailPoint {
   x: number;
   y: number;
@@ -62,6 +71,9 @@ export interface EngineStats {
   activeKeys: string[];
   currentBiome: string;
   currentCycle: number;
+  prismsLeft: number;
+  anchorsCount: number;
+  preservedObstaclesCount: number;
   obstaclesInView: number;
   totalObstacles: number;
   collidingX: boolean;

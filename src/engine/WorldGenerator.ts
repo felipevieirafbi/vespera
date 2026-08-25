@@ -1,4 +1,4 @@
-import { WorldObstacle, BiomeType } from '../types/game';
+import { WorldObstacle, BiomeType, RealityAnchor } from '../types/game';
 
 interface BiomeZone {
   type: BiomeType;
@@ -13,7 +13,23 @@ interface BiomeZone {
 }
 
 export class WorldGenerator {
-  public static generateBiomesAndObstacles(totalTarget: number = 300): WorldObstacle[] {
+  /**
+   * Helper to check if a coordinate falls inside any active Reality Anchor's 450px Stability Field
+   */
+  public static isInsideAnyAnchor(x: number, y: number, anchors: RealityAnchor[]): boolean {
+    for (const anchor of anchors) {
+      const dist = Math.hypot(x - anchor.x, y - anchor.y);
+      if (dist <= anchor.radius + 30) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  public static generateBiomesAndObstacles(
+    totalTarget: number = 300,
+    existingAnchors: RealityAnchor[] = []
+  ): WorldObstacle[] {
     const obstacles: WorldObstacle[] = [];
     let idCounter = 1;
 
@@ -81,6 +97,9 @@ export class WorldGenerator {
           // Clamp to world bounds
           if (x < -1880 || x > 1880 || y < -1880 || y > 1880) continue;
 
+          // CRITICAL: Spatial Restriction - Do NOT spawn inside active Anchor stability zones
+          if (this.isInsideAnyAnchor(x, y, existingAnchors)) continue;
+
           const shape = zone.shapes[Math.floor(Math.random() * zone.shapes.length)];
           let width = 40;
           let height = 40;
@@ -122,13 +141,16 @@ export class WorldGenerator {
 
     // 2. Fill remaining spots with scattered transition fragments
     let attempts = 0;
-    while (obstacles.length < totalTarget && attempts < 1000) {
+    while (obstacles.length < totalTarget && attempts < 1500) {
       attempts++;
       const x = Math.floor(Math.random() * 3600) - 1800;
       const y = Math.floor(Math.random() * 3600) - 1800;
 
       // Safe zone at origin
       if (Math.abs(x) < 140 && Math.abs(y) < 140) continue;
+
+      // CRITICAL: Spatial Restriction - Do NOT spawn inside active Anchor stability zones
+      if (this.isInsideAnyAnchor(x, y, existingAnchors)) continue;
 
       // Determine closest biome
       let closestZone = zones[0];

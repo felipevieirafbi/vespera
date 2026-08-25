@@ -54,12 +54,23 @@ export class InputManager {
     }
   }
 
+  public consumeKey(codeOrKey: string): boolean {
+    const hasKey = this.pressedKeys.has(codeOrKey) || this.pressedKeys.has(codeOrKey.toLowerCase());
+    if (hasKey) {
+      this.pressedKeys.delete(codeOrKey);
+      this.pressedKeys.delete(codeOrKey.toLowerCase());
+      this.notifyChange();
+      return true;
+    }
+    return false;
+  }
+
   public isKeyPressed(codeOrKey: string): boolean {
     return this.pressedKeys.has(codeOrKey) || this.pressedKeys.has(codeOrKey.toLowerCase());
   }
 
   public getActiveKeysList(): string[] {
-    const relevant = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'Space', 'KeyR'];
+    const relevant = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'Space', 'KeyR', 'KeyF'];
     return relevant.filter(k => this.pressedKeys.has(k) || this.pressedKeys.has(k.toLowerCase()));
   }
 

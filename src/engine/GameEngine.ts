@@ -1,4 +1,4 @@
-import { Player, WorldObstacle, DustParticle, PlayerTrailPoint, EngineStats, EngineConfig } from '../types/game';
+import { Player, WorldObstacle, DustParticle, PlayerTrailPoint, EngineStats, EngineConfig, RealityAnchor } from '../types/game';
 import { VirtualCamera } from './Camera';
 import { InputManager } from './InputManager';
 import { WorldGenerator } from './WorldGenerator';
@@ -18,6 +18,11 @@ export class GameEngine {
   public obstacles: WorldObstacle[] = [];
   public particles: DustParticle[] = [];
   public playerTrail: PlayerTrailPoint[] = [];
+
+  // Reality Anchors (Phase 4)
+  public anchors: RealityAnchor[] = [];
+  public availablePrisms: number = 3;
+  public preservedObstaclesCount: number = 0;
 
   public config: EngineConfig = {
     gridSize: 80,
@@ -53,6 +58,9 @@ export class GameEngine {
     activeKeys: [],
     currentBiome: 'Floresta de Quartzo',
     currentCycle: 1,
+    prismsLeft: 3,
+    anchorsCount: 0,
+    preservedObstaclesCount: 0,
     obstaclesInView: 0,
     totalObstacles: 300,
     collidingX: false,
@@ -99,10 +107,35 @@ export class GameEngine {
   }
 
   /**
+   * Plants a Reality Anchor at player's current world position
+   * Radius: strict 450px Stability Field
+   */
+  public plantAnchor(): boolean {
+    if (this.availablePrisms <= 0 || this.ruptureState !== 'idle') {
+      return false;
+    }
+
+    this.availablePrisms--;
+    const newAnchor: RealityAnchor = {
+      id: this.anchors.length + 1,
+      x: Math.round(this.player.x),
+      y: Math.round(this.player.y),
+      radius: 450,
+      placedAtCycle: this.currentCycle,
+      color: '#FFFFFF',
+    };
+
+    this.anchors.push(newAnchor);
+    this.stats.prismsLeft = this.availablePrisms;
+    this.stats.anchorsCount = this.anchors.length;
+    return true;
+  }
+
+  /**
    * Initializes 300 procedural cluster obstacles across 3 Biomes
    */
   public initWorld(): void {
-    this.obstacles = WorldGenerator.generateBiomesAndObstacles(300);
+    this.obstacles = WorldGenerator.generateBiomesAndObstacles(300, this.anchors);
     this.stats.totalObstacles = this.obstacles.length;
   }
 
@@ -196,6 +229,11 @@ export class GameEngine {
       this.forceRupture();
     }
 
+    // Plant Anchor Trigger (F key)
+    if ((this.inputManager.consumeKey('KeyF') || this.inputManager.consumeKey('f')) && this.ruptureState === 'idle') {
+      this.plantAnchor();
+    }
+
     // Process Rupture State Machine
     if (this.ruptureState === 'collapsing') {
       this.ruptureAlpha += dt * 1.5;
@@ -210,7 +248,32 @@ export class GameEngine {
       this.currentCycle++;
       this.stats.currentCycle = this.currentCycle;
       this.resetPlayerPosition();
-      this.initWorld();
+      
+      // ==========================================================
+      // FASE 4: A PERSISTÊNCIA NO CALEIDOSCÓPIO (Âncoras de Realidade)
+      // ==========================================================
+      // 1. Salvar (Backup): Obstáculos cujo centro está <= 450px de QUALQUER âncora
+      const preservedObstacles: WorldObstacle[] = this.obstacles.filter((obs) => {
+        return this.anchors.some((anchor) => {
+          const dist = Math.hypot(obs.x - anchor.x, obs.y - anchor.y);
+          return dist <= anchor.radius;
+        });
+      });
+      this.preservedObstaclesCount = preservedObstacles.length;
+
+      // 2. Regerar com Restrição: Não spawnar novos cristais dentro do raio de 450px das âncoras
+      const targetNewObstacles = Math.max(60, 300 - preservedObstacles.length);
+      const newObstacles = WorldGenerator.generateBiomesAndObstacles(targetNewObstacles, this.anchors);
+
+      // 3. Mesclar: Juntar obstáculos preservados das âncoras com os novos biomas
+      const mergedObstacles = [...preservedObstacles, ...newObstacles];
+      mergedObstacles.forEach((obs, idx) => {
+        obs.id = idx + 1;
+      });
+      this.obstacles = mergedObstacles;
+      this.stats.totalObstacles = this.obstacles.length;
+      this.stats.preservedObstaclesCount = this.preservedObstaclesCount;
+
       this.ruptureState = 'awakening';
     } else if (this.ruptureState === 'awakening') {
       this.shakeX = 0;
@@ -340,6 +403,9 @@ export class GameEngine {
     if (this.config.enableParticles) {
       this.renderParallaxDust(ctx, 0.4);
     }
+
+    // 4.5 Reality Anchors and Stability Fields (Phase 4)
+    this.renderAnchors(ctx);
 
     // 5. Procedural Biome Obstacles (with strict Frustum Culling)
     let visibleObstacles = 0;
@@ -483,6 +549,92 @@ export class GameEngine {
     ctx.fillStyle = 'rgba(239, 68, 68, 0.6)';
     ctx.fillText('LIMITE DO CALEIDOSCÓPIO [-2000, -2000]', minX + 20, minY + 25);
     ctx.fillText('LIMITE DO CALEIDOSCÓPIO [+2000, +2000]', maxX - 280, maxY - 15);
+  }
+
+  /**
+   * Renders Reality Anchors and their 450px Stability Fields
+   */
+  private renderAnchors(ctx: CanvasRenderingContext2D): void {
+    if (this.anchors.length === 0) return;
+
+    for (const anchor of this.anchors) {
+      // 1. Campo de Estabilidade (Raio Estrito de 450px)
+      ctx.save();
+      
+      // Sutil preenchimento de campo de força
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.04)';
+      ctx.beginPath();
+      ctx.arc(anchor.x, anchor.y, anchor.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Círculo perimetral perfeito (linha fina, ciano sutil com opacidade 0.18)
+      ctx.strokeStyle = 'rgba(6, 182, 212, 0.28)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(anchor.x, anchor.y, anchor.radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Anel harmônico pontilhado interno
+      ctx.strokeStyle = 'rgba(254, 240, 138, 0.18)'; // ouro sutil
+      ctx.lineWidth = 1;
+      ctx.setLineDash([8, 8]);
+      ctx.beginPath();
+      ctx.arc(anchor.x, anchor.y, anchor.radius * 0.5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Rótulo da Zona de Estabilidade
+      ctx.font = 'bold 9.5px monospace';
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.75)';
+      ctx.textAlign = 'center';
+      ctx.fillText(
+        `CAMPO DE ESTABILIDADE #${anchor.id} • RAIO 450px (FIXADO NO CICLO ${anchor.placedAtCycle})`,
+        anchor.x,
+        anchor.y - anchor.radius - 8
+      );
+
+      ctx.restore();
+
+      // 2. Visual do Prisma / Âncora (Diamante / Losango Branco Ultra Brilhante)
+      ctx.save();
+      if (this.config.enableGlow) {
+        ctx.shadowColor = '#FFFFFF';
+        ctx.shadowBlur = 24;
+      }
+
+      const dSize = 20;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.moveTo(anchor.x, anchor.y - dSize);
+      ctx.lineTo(anchor.x + dSize * 0.75, anchor.y);
+      ctx.lineTo(anchor.x, anchor.y + dSize);
+      ctx.lineTo(anchor.x - dSize * 0.75, anchor.y);
+      ctx.closePath();
+      ctx.fill();
+
+      // Núcleo cristalino com reflexo ciano/dourado
+      ctx.fillStyle = '#67e8f9';
+      const innerSize = 8;
+      ctx.beginPath();
+      ctx.moveTo(anchor.x, anchor.y - innerSize);
+      ctx.lineTo(anchor.x + innerSize * 0.75, anchor.y);
+      ctx.lineTo(anchor.x, anchor.y + innerSize);
+      ctx.lineTo(anchor.x - innerSize * 0.75, anchor.y);
+      ctx.closePath();
+      ctx.fill();
+
+      // Eixo de estabilização
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(anchor.x, anchor.y - dSize);
+      ctx.lineTo(anchor.x, anchor.y + dSize);
+      ctx.moveTo(anchor.x - dSize * 0.75, anchor.y);
+      ctx.lineTo(anchor.x + dSize * 0.75, anchor.y);
+      ctx.stroke();
+
+      ctx.restore();
+    }
   }
 
   private renderObstacle(ctx: CanvasRenderingContext2D, obs: WorldObstacle): void {

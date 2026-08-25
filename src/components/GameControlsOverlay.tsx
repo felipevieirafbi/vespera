@@ -1,5 +1,5 @@
 import React from 'react';
-import { RotateCcw, ZoomIn, ZoomOut, Sparkles, Wind, Eye, SunDim, AlertTriangle } from 'lucide-react';
+import { RotateCcw, ZoomIn, ZoomOut, Sparkles, Wind, Eye, SunDim, AlertTriangle, Gem } from 'lucide-react';
 
 interface GameControlsOverlayProps {
   onResetPosition: () => void;
@@ -12,6 +12,8 @@ interface GameControlsOverlayProps {
   onToggleParticles: () => void;
   onToggleVignette: () => void;
   onForceRupture: () => void;
+  onPlantAnchor: () => void;
+  prismsLeft: number;
   enableGlow: boolean;
   enableTrail: boolean;
   enableParticles: boolean;
@@ -30,17 +32,40 @@ export const GameControlsOverlay: React.FC<GameControlsOverlayProps> = ({
   onToggleParticles,
   onToggleVignette,
   onForceRupture,
+  onPlantAnchor,
+  prismsLeft,
   enableGlow,
   enableTrail,
   enableParticles,
   enableVignette,
   currentZoom,
 }) => {
+  const canPlant = prismsLeft > 0;
+
   return (
     <div
       id="game-controls-toolbar"
       className="flex flex-wrap items-center justify-center gap-1.5 rounded-2xl border border-cyan-500/20 bg-slate-950/85 p-2 backdrop-blur-md shadow-2xl shadow-cyan-950/30"
     >
+      {/* Plant Reality Anchor Button (F) */}
+      <button
+        id="btn-plant-anchor"
+        onClick={onPlantAnchor}
+        disabled={!canPlant}
+        className={`flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-bold font-mono transition active:scale-95 ${
+          canPlant
+            ? 'border-cyan-400/80 bg-cyan-950/80 text-cyan-200 hover:bg-cyan-900 hover:border-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.4)] cursor-pointer'
+            : 'border-slate-800 bg-slate-900/40 text-slate-600 cursor-not-allowed opacity-60'
+        }`}
+        title={canPlant ? "Fincar Prisma de Estabilidade no local atual (Raio 450px)" : "Sem prismas disponíveis neste ciclo"}
+      >
+        <Gem className={`w-3.5 h-3.5 ${canPlant ? 'text-cyan-300 animate-pulse' : 'text-slate-600'}`} />
+        <span>FINCAR PRISMA (F)</span>
+        <span className="ml-0.5 text-[10px] px-1 rounded bg-black/40 text-cyan-300 font-normal">
+          {prismsLeft}
+        </span>
+      </button>
+
       {/* Force Rupture Button */}
       <button
         id="btn-force-rupture"

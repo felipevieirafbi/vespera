@@ -1,6 +1,6 @@
 {
   "name": "VÉSPERA: A Tempestade de Vidro",
-  "description": "Motor 2D Top-Down para RPG/Roguelike - Fase 3: A Tempestade de Vidro. Sistema de Ciclos (Metaprogresso), Suicídio Tático e Regeração Procedural do Mundo via Máquina de Estados.",
+  "description": "Motor 2D Top-Down para RPG/Roguelike - Fase 4: As Âncoras de Realidade (Prismas de Estabilidade). Sistema de persistência temporal em Roguelike de mundo aberto com campos de estabilidade de 450px.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

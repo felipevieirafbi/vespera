@@ -1,6 +1,6 @@
 import React from 'react';
 import { EngineStats } from '../types/game';
-import { Activity, Compass, Cpu, Gauge, Zap, Shield, Sparkles, SlidersHorizontal } from 'lucide-react';
+import { Activity, Compass, Cpu, Gauge, Zap, Shield, Sparkles, Gem, Anchor } from 'lucide-react';
 
 interface TelemetryHUDProps {
   stats: EngineStats;
@@ -25,13 +25,43 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
       id="telemetry-hud-root"
       className="flex flex-col gap-2 max-w-sm pointer-events-none select-none"
     >
-      {/* Realidade Cycle Indicator */}
-      <div className="flex items-center justify-center rounded-xl border border-cyan-500/50 bg-cyan-950/80 p-2 backdrop-blur-md shadow-[0_0_15px_rgba(6,182,212,0.3)]">
-        <h1 className="text-sm font-bold uppercase tracking-widest text-cyan-300 font-mono flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-cyan-400" />
-          CICLO DE REALIDADE: <span className="text-white text-base ml-1">{stats.currentCycle}</span>
-          <Sparkles className="w-4 h-4 text-cyan-400" />
-        </h1>
+      {/* Reality Cycle & Prisms Inventory Banner */}
+      <div className="flex flex-col gap-1.5 rounded-xl border border-cyan-500/50 bg-slate-950/90 p-2.5 backdrop-blur-md shadow-[0_0_20px_rgba(6,182,212,0.25)]">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xs font-bold uppercase tracking-widest text-cyan-300 font-mono flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+            CICLO DE REALIDADE: <span className="text-white text-sm ml-0.5">{stats.currentCycle}</span>
+          </h1>
+          <span className="text-[10px] font-mono text-cyan-400/80 bg-cyan-950/60 border border-cyan-500/30 px-1.5 py-0.5 rounded">
+            FASE 4: ÂNCORAS
+          </span>
+        </div>
+
+        {/* Prisms & Anchors Bar */}
+        <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-800 text-[11px] font-mono">
+          {/* Prisms Left */}
+          <div className="flex items-center gap-1 bg-cyan-950/40 border border-cyan-500/30 rounded p-1 justify-center">
+            <Gem className={`w-3.5 h-3.5 ${stats.prismsLeft > 0 ? 'text-cyan-300 animate-pulse' : 'text-slate-600'}`} />
+            <span className="text-slate-400 text-[9.5px]">PRISMAS:</span>
+            <span className={`font-bold ${stats.prismsLeft > 0 ? 'text-cyan-200' : 'text-slate-500'}`}>
+              {stats.prismsLeft}
+            </span>
+          </div>
+
+          {/* Placed Anchors */}
+          <div className="flex items-center gap-1 bg-slate-900/60 border border-slate-800 rounded p-1 justify-center">
+            <Anchor className="w-3.5 h-3.5 text-amber-300" />
+            <span className="text-slate-400 text-[9.5px]">ÂNCO.:</span>
+            <span className="font-bold text-amber-200">{stats.anchorsCount}</span>
+          </div>
+
+          {/* Preserved Obstacles */}
+          <div className="flex items-center gap-1 bg-slate-900/60 border border-slate-800 rounded p-1 justify-center">
+            <Shield className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-slate-400 text-[9.5px]">PRESERV:</span>
+            <span className="font-bold text-emerald-300">{stats.preservedObstaclesCount}</span>
+          </div>
+        </div>
       </div>
 
       {/* Primary Metrics Card */}
@@ -41,7 +71,7 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_10px_#00FFFF]" />
             <h2 className="text-xs font-bold uppercase tracking-wider text-cyan-400 font-mono">
-              VÉSPERA • FASE 2
+              VÉSPERA • TELEMETRIA
             </h2>
           </div>
           <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-300">
@@ -51,7 +81,7 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
         </div>
 
         {/* Biome Indicator Banner */}
-        <div className="mb-2 flex items-center justify-between rounded-md border p-1.5 px-2.5 font-mono text-[11px] transition-colors duration-300 ${getBiomeBadgeColor(stats.currentBiome)}">
+        <div className={`mb-2 flex items-center justify-between rounded-md border p-1.5 px-2.5 font-mono text-[11px] transition-colors duration-300 ${getBiomeBadgeColor(stats.currentBiome)}`}>
           <div className="flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5" />
             <span className="font-semibold">{stats.currentBiome}</span>
@@ -133,8 +163,8 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
       {/* Real-time Keyboard Visualizer */}
       <div className="rounded-xl border border-slate-800/90 bg-slate-950/75 p-2 backdrop-blur-md">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[9.5px] font-mono uppercase text-slate-400">Entrada Vetorial</span>
-          <span className="text-[9.5px] font-mono text-cyan-400/80">WASD / Setas</span>
+          <span className="text-[9.5px] font-mono uppercase text-slate-400">Entrada Vetorial & Ações</span>
+          <span className="text-[9.5px] font-mono text-cyan-400/80">WASD / F (Prisma) / R (Ruptura)</span>
         </div>
 
         <div className="flex justify-center gap-1 font-mono text-xs select-none">
@@ -176,21 +206,30 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
           </div>
 
           {/* Shift Sprint key */}
-          <div className={`ml-2 px-2 h-8 flex items-center justify-center rounded border self-end text-[10px] transition-all ${
+          <div className={`ml-1 px-1.5 h-8 flex items-center justify-center rounded border self-end text-[10px] transition-all ${
             isKeyActive('shiftleft') || isKeyActive('shiftright') || isKeyActive('shift')
               ? 'border-amber-400 bg-amber-500/30 text-amber-200 shadow-[0_0_8px_#f59e0b]'
               : 'border-slate-800 bg-slate-900/60 text-slate-500'
           }`}>
-            <Zap className="w-3 h-3 mr-1" />
+            <Zap className="w-3 h-3 mr-0.5" />
             SHIFT
           </div>
 
+          {/* F Plant Anchor key */}
+          <div className={`w-8 h-8 flex items-center justify-center rounded border self-end font-bold transition-all ${
+            isKeyActive('f')
+              ? 'border-cyan-300 bg-cyan-500/50 text-white shadow-[0_0_12px_#00FFFF]'
+              : 'border-cyan-900/80 bg-cyan-950/40 text-cyan-400'
+          }`} title="Fincar Prisma de Estabilidade">
+            F
+          </div>
+
           {/* R Rupture key */}
-          <div className={`ml-1 w-8 h-8 flex items-center justify-center rounded border self-end font-bold transition-all ${
+          <div className={`w-8 h-8 flex items-center justify-center rounded border self-end font-bold transition-all ${
             isKeyActive('r')
               ? 'border-rose-400 bg-rose-500/40 text-rose-200 shadow-[0_0_12px_#f43f5e]'
               : 'border-slate-800 bg-slate-900/60 text-slate-500'
-          }`}>
+          }`} title="Forçar Ruptura Temporal">
             R
           </div>
         </div>

@@ -20,6 +20,10 @@ export const GameCanvas: React.FC = () => {
     isMoving: false,
     activeKeys: [],
     currentBiome: 'Floresta de Quartzo',
+    currentCycle: 1,
+    prismsLeft: 3,
+    anchorsCount: 0,
+    preservedObstaclesCount: 0,
     obstaclesInView: 0,
     totalObstacles: 300,
     collidingX: false,
@@ -131,6 +135,10 @@ export const GameCanvas: React.FC = () => {
     engineRef.current?.forceRupture();
   }, []);
 
+  const handlePlantAnchor = useCallback(() => {
+    engineRef.current?.plantAnchor();
+  }, []);
+
   const handleDirectionChange = useCallback((dx: number, dy: number) => {
     engineRef.current?.inputManager.setVirtualVector(dx, dy);
   }, []);
@@ -158,14 +166,14 @@ export const GameCanvas: React.FC = () => {
           <Sparkles className="w-4 h-4 text-cyan-400 animate-pulse" />
           <div className="text-right">
             <h1 className="text-xs font-bold tracking-wider text-cyan-300 font-mono">
-              VÉSPERA: FASE 3
+              VÉSPERA: FASE 4
             </h1>
-            <p className="text-[9.5px] text-slate-400 font-mono">A Tempestade de Vidro (Ruptura)</p>
+            <p className="text-[9.5px] text-slate-400 font-mono">As Âncoras de Realidade (Prismas)</p>
           </div>
           <button
             onClick={() => setShowHelp(!showHelp)}
             className="ml-1 p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-cyan-300 transition"
-            title="Especificações da Fase 3"
+            title="Especificações da Fase 4"
           >
             <Info className="w-3.5 h-3.5" />
           </button>
@@ -176,6 +184,7 @@ export const GameCanvas: React.FC = () => {
             playerX={stats.worldX}
             playerY={stats.worldY}
             obstacles={engineRef.current.obstacles}
+            anchors={engineRef.current.anchors}
             worldBounds={engineRef.current.config.worldBounds}
           />
         )}
@@ -194,6 +203,8 @@ export const GameCanvas: React.FC = () => {
           onToggleParticles={handleToggleParticles}
           onToggleVignette={handleToggleVignette}
           onForceRupture={handleForceRupture}
+          onPlantAnchor={handlePlantAnchor}
+          prismsLeft={stats.prismsLeft ?? 3}
           enableGlow={enableGlow}
           enableTrail={enableTrail}
           enableParticles={enableParticles}
@@ -216,7 +227,7 @@ export const GameCanvas: React.FC = () => {
           <div className="max-w-lg w-full rounded-2xl border border-cyan-500/30 bg-slate-950 p-5 shadow-2xl text-slate-200">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
               <h3 className="text-sm font-bold text-cyan-400 font-mono uppercase tracking-wider">
-                VÉSPERA: Especificações da Fase 3
+                VÉSPERA: Especificações da Fase 4
               </h3>
               <button
                 onClick={() => setShowHelp(false)}
@@ -228,26 +239,24 @@ export const GameCanvas: React.FC = () => {
 
             <div className="space-y-3 text-xs font-mono text-slate-300 leading-relaxed max-h-[70vh] overflow-y-auto pr-1">
               <div>
-                <h4 className="text-cyan-300 font-bold mb-0.5">1. O Estado do Ciclo (Metaprogresso):</h4>
+                <h4 className="text-cyan-300 font-bold mb-0.5">1. Âncoras de Realidade (Prismas de Estabilidade):</h4>
                 <p className="text-[11px] text-slate-400">
-                  O jogo agora gerencia a variável de Ciclo Atual, exibida em letras neon no topo do HUD: <code className="text-cyan-300">CICLO DE REALIDADE: [X]</code>. A cada suicídio tático, o mundo renasce e o ciclo avança.
+                  O jogador carrega inicialmente <strong className="text-cyan-200">3 Prismas</strong>. Pressione a tecla <strong className="text-cyan-200">F</strong> ou clique em <strong className="text-cyan-200">FINCAR PRISMA (F)</strong> para fixar uma âncora nas suas coordenadas globais.
                 </p>
               </div>
 
               <div>
-                <h4 className="text-rose-300 font-bold mb-0.5">2. O Gatilho da Ruptura (Suicídio Tático):</h4>
+                <h4 className="text-amber-300 font-bold mb-0.5">2. Campo de Estabilidade (Raio 450px):</h4>
                 <p className="text-[11px] text-slate-400">
-                  Aperte a tecla <strong className="text-rose-200">R</strong> ou clique no botão vermelho <strong className="text-rose-200">FORÇAR RUPTURA</strong> para disparar o cataclismo temporal. Isso iniciará um evento cinematográfico que bloqueia os controles temporariamente.
+                  Cada âncora fincada cria um campo de força de 450px de raio e é marcada por um diamante celestial ultra-brilhante no mapa.
                 </p>
               </div>
 
               <div>
-                <h4 className="text-cyan-300 font-bold mb-0.5">3. A Tempestade de Vidro (VFX e State Machine):</h4>
-                <ul className="list-disc pl-4 space-y-1 text-[11px] text-slate-400">
-                  <li><strong className="text-slate-200">Fase A (Colapso Visual):</strong> Camera shake intenso e flash branco com aumento rápido de Alpha.</li>
-                  <li><strong className="text-slate-200">Fase B (Regeração Oculta):</strong> No pico do clarão (Alpha=1), o jogador é teleportado para o centro (0, 0), seu trail é limpo, o ciclo avança e o mapa é COMPLETAMENTE REGERADO proceduralmente.</li>
-                  <li><strong className="text-slate-200">Fase C (O Despertar):</strong> Fade out suave e renderização da mensagem <em className="text-slate-300">"O Caleidoscópio Gira..."</em>. O controle é devolvido ao jogador.</li>
-                </ul>
+                <h4 className="text-emerald-300 font-bold mb-0.5">3. A Regra de Ouro da Persistência:</h4>
+                <p className="text-[11px] text-slate-400">
+                  Ao forçar uma <strong className="text-rose-300">Ruptura (R)</strong>, todo o universo do Caleidoscópio entra em colapso e se regenera, <strong className="text-emerald-300">EXCETO</strong> as Âncoras e todas as estruturas dentro de seus Campos de Estabilidade (450px), que permanecem intactas no próximo ciclo!
+                </p>
               </div>
             </div>
 
