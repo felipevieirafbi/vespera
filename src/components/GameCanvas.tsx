@@ -127,6 +127,10 @@ export const GameCanvas: React.FC = () => {
     setEnableVignette(next);
   }, [enableVignette]);
 
+  const handleForceRupture = useCallback(() => {
+    engineRef.current?.forceRupture();
+  }, []);
+
   const handleDirectionChange = useCallback((dx: number, dy: number) => {
     engineRef.current?.inputManager.setVirtualVector(dx, dy);
   }, []);
@@ -154,14 +158,14 @@ export const GameCanvas: React.FC = () => {
           <Sparkles className="w-4 h-4 text-cyan-400 animate-pulse" />
           <div className="text-right">
             <h1 className="text-xs font-bold tracking-wider text-cyan-300 font-mono">
-              VÉSPERA: FASE 2
+              VÉSPERA: FASE 3
             </h1>
-            <p className="text-[9.5px] text-slate-400 font-mono">Caleidoscópio, AABB & VFX</p>
+            <p className="text-[9.5px] text-slate-400 font-mono">A Tempestade de Vidro (Ruptura)</p>
           </div>
           <button
             onClick={() => setShowHelp(!showHelp)}
             className="ml-1 p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-cyan-300 transition"
-            title="Especificações da Fase 2"
+            title="Especificações da Fase 3"
           >
             <Info className="w-3.5 h-3.5" />
           </button>
@@ -189,6 +193,7 @@ export const GameCanvas: React.FC = () => {
           onToggleTrail={handleToggleTrail}
           onToggleParticles={handleToggleParticles}
           onToggleVignette={handleToggleVignette}
+          onForceRupture={handleForceRupture}
           enableGlow={enableGlow}
           enableTrail={enableTrail}
           enableParticles={enableParticles}
@@ -211,7 +216,7 @@ export const GameCanvas: React.FC = () => {
           <div className="max-w-lg w-full rounded-2xl border border-cyan-500/30 bg-slate-950 p-5 shadow-2xl text-slate-200">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
               <h3 className="text-sm font-bold text-cyan-400 font-mono uppercase tracking-wider">
-                VÉSPERA: Especificações da Fase 2
+                VÉSPERA: Especificações da Fase 3
               </h3>
               <button
                 onClick={() => setShowHelp(false)}
@@ -223,31 +228,26 @@ export const GameCanvas: React.FC = () => {
 
             <div className="space-y-3 text-xs font-mono text-slate-300 leading-relaxed max-h-[70vh] overflow-y-auto pr-1">
               <div>
-                <h4 className="text-cyan-300 font-bold mb-0.5">1. Polimento Gráfico e VFX:</h4>
-                <ul className="list-disc pl-4 space-y-1 text-[11px] text-slate-400">
-                  <li><strong className="text-slate-200">Fundo Abissal:</strong> Canvas preenchido com <code className="text-cyan-300">#050510</code>.</li>
-                  <li><strong className="text-slate-200">A Anomalia (Player):</strong> Glow/Bloom mágico com <code className="text-cyan-300">shadowBlur = 15</code> e <code className="text-cyan-300">shadowColor = '#00FFFF'</code>.</li>
-                  <li><strong className="text-slate-200">Rastro de Luz (Trail):</strong> Histórico das últimas 14 posições com decaimento suave de tamanho e opacidade.</li>
-                  <li><strong className="text-slate-200">Poeira Mágica (Parallax):</strong> 150 partículas estelares/douradas com multi-camadas de profundidade 3D.</li>
-                  <li><strong className="text-slate-200">Vinheta Cinematográfica:</strong> Gradiente radial de borda para atmosfera sombria.</li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="text-cyan-300 font-bold mb-0.5">2. Geração Procedural de 3 Biomas:</h4>
-                <ul className="list-disc pl-4 space-y-1 text-[11px] text-slate-400">
-                  <li><strong className="text-emerald-300">Floresta de Quartzo:</strong> Retângulos e prismas verde-esmeralda neon.</li>
-                  <li><strong className="text-purple-300">Ruínas do Tempo:</strong> Quadrados e pilares rúnicos violeta/magenta.</li>
-                  <li><strong className="text-orange-300">Deserto Carmesim:</strong> Fragmentos e blocos solares em laranja vibrante.</li>
-                  <li><strong className="text-slate-200">Frustum Culling:</strong> Renderiza estritamente os objetos dentro do campo de visão da câmera.</li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="text-cyan-300 font-bold mb-0.5">3. Física e Colisão Deslizante (AABB Sliding):</h4>
+                <h4 className="text-cyan-300 font-bold mb-0.5">1. O Estado do Ciclo (Metaprogresso):</h4>
                 <p className="text-[11px] text-slate-400">
-                  Resolução independente nos eixos X e Y: ao colidir na diagonal contra qualquer parede, o eixo afetado é bloqueado enquanto o outro continua deslizando com velocidade integral e fluidez perfeita.
+                  O jogo agora gerencia a variável de Ciclo Atual, exibida em letras neon no topo do HUD: <code className="text-cyan-300">CICLO DE REALIDADE: [X]</code>. A cada suicídio tático, o mundo renasce e o ciclo avança.
                 </p>
+              </div>
+
+              <div>
+                <h4 className="text-rose-300 font-bold mb-0.5">2. O Gatilho da Ruptura (Suicídio Tático):</h4>
+                <p className="text-[11px] text-slate-400">
+                  Aperte a tecla <strong className="text-rose-200">R</strong> ou clique no botão vermelho <strong className="text-rose-200">FORÇAR RUPTURA</strong> para disparar o cataclismo temporal. Isso iniciará um evento cinematográfico que bloqueia os controles temporariamente.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="text-cyan-300 font-bold mb-0.5">3. A Tempestade de Vidro (VFX e State Machine):</h4>
+                <ul className="list-disc pl-4 space-y-1 text-[11px] text-slate-400">
+                  <li><strong className="text-slate-200">Fase A (Colapso Visual):</strong> Camera shake intenso e flash branco com aumento rápido de Alpha.</li>
+                  <li><strong className="text-slate-200">Fase B (Regeração Oculta):</strong> No pico do clarão (Alpha=1), o jogador é teleportado para o centro (0, 0), seu trail é limpo, o ciclo avança e o mapa é COMPLETAMENTE REGERADO proceduralmente.</li>
+                  <li><strong className="text-slate-200">Fase C (O Despertar):</strong> Fade out suave e renderização da mensagem <em className="text-slate-300">"O Caleidoscópio Gira..."</em>. O controle é devolvido ao jogador.</li>
+                </ul>
               </div>
             </div>
 

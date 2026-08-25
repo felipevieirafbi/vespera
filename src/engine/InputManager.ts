@@ -59,7 +59,7 @@ export class InputManager {
   }
 
   public getActiveKeysList(): string[] {
-    const relevant = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'Space'];
+    const relevant = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'Space', 'KeyR'];
     return relevant.filter(k => this.pressedKeys.has(k) || this.pressedKeys.has(k.toLowerCase()));
   }
 

@@ -1,6 +1,6 @@
 {
-  "name": "VÉSPERA: O Caleidoscópio Fragmentado",
-  "description": "Motor 2D Top-Down para RPG/Roguelike - Fase 2: Geração Procedural de 3 Biomas, Colisão Deslizante AABB e VFX Cinematográfico com Parallax e Trail.",
+  "name": "VÉSPERA: A Tempestade de Vidro",
+  "description": "Motor 2D Top-Down para RPG/Roguelike - Fase 3: A Tempestade de Vidro. Sistema de Ciclos (Metaprogresso), Suicídio Tático e Regeração Procedural do Mundo via Máquina de Estados.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

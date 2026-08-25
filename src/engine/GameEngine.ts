@@ -36,6 +36,13 @@ export class GameEngine {
     cameraSmoothing: 1.0, // 1.0 = strict centered camera
   };
 
+  // Rupture State (Glass Storm)
+  private ruptureState: 'idle' | 'collapsing' | 'regenerating' | 'awakening' = 'idle';
+  private ruptureAlpha: number = 0;
+  private shakeX: number = 0;
+  private shakeY: number = 0;
+  private currentCycle: number = 1;
+
   private stats: EngineStats = {
     fps: 60,
     deltaTime: 0,
@@ -45,6 +52,7 @@ export class GameEngine {
     isMoving: false,
     activeKeys: [],
     currentBiome: 'Floresta de Quartzo',
+    currentCycle: 1,
     obstaclesInView: 0,
     totalObstacles: 300,
     collidingX: false,
@@ -82,6 +90,12 @@ export class GameEngine {
 
     this.initWorld();
     this.initDustParticles(150);
+  }
+
+  public forceRupture(): void {
+    if (this.ruptureState === 'idle') {
+      this.ruptureState = 'collapsing';
+    }
   }
 
   /**
@@ -177,7 +191,45 @@ export class GameEngine {
   };
 
   private update(dt: number): void {
-    const moveVector = this.inputManager.getMovementVector();
+    // Rupture Trigger
+    if ((this.inputManager.isKeyPressed('KeyR') || this.inputManager.isKeyPressed('r')) && this.ruptureState === 'idle') {
+      this.forceRupture();
+    }
+
+    // Process Rupture State Machine
+    if (this.ruptureState === 'collapsing') {
+      this.ruptureAlpha += dt * 1.5;
+      this.shakeX = (Math.random() - 0.5) * 30; // -15 to +15
+      this.shakeY = (Math.random() - 0.5) * 30; // -15 to +15
+      
+      if (this.ruptureAlpha >= 1.0) {
+        this.ruptureAlpha = 1.0;
+        this.ruptureState = 'regenerating';
+      }
+    } else if (this.ruptureState === 'regenerating') {
+      this.currentCycle++;
+      this.stats.currentCycle = this.currentCycle;
+      this.resetPlayerPosition();
+      this.initWorld();
+      this.ruptureState = 'awakening';
+    } else if (this.ruptureState === 'awakening') {
+      this.shakeX = 0;
+      this.shakeY = 0;
+      this.ruptureAlpha -= dt * 0.8;
+      
+      if (this.ruptureAlpha <= 0) {
+        this.ruptureAlpha = 0;
+        this.ruptureState = 'idle';
+      }
+    }
+
+    let moveVector = this.inputManager.getMovementVector();
+    
+    // Lock controls during rupture
+    if (this.ruptureState !== 'idle') {
+      moveVector = { x: 0, y: 0 };
+    }
+
     const isSprinting = this.inputManager.isSprinting();
     const currentSpeed = this.player.speed * (isSprinting ? this.config.sprintMultiplier : 1.0);
 
@@ -273,6 +325,11 @@ export class GameEngine {
     // Apply Virtual Camera matrix
     this.camera.applyTransform(ctx);
 
+    // Apply camera shake if rupturing
+    if (this.ruptureState !== 'idle' && (this.shakeX !== 0 || this.shakeY !== 0)) {
+      ctx.translate(this.shakeX, this.shakeY);
+    }
+
     // 2. Infinite Subtle Grid
     this.renderInfiniteGrid(ctx);
 
@@ -313,6 +370,21 @@ export class GameEngine {
     // 9. Cinematographic Vignette (Radial Gradient at viewport edges)
     if (this.config.enableVignette) {
       this.renderVignette(ctx, width, height);
+    }
+
+    // 10. Rupture Flash & Text Overlay
+    if (this.ruptureAlpha > 0) {
+      ctx.fillStyle = `rgba(255, 255, 255, ${this.ruptureAlpha})`;
+      ctx.fillRect(0, 0, width, height);
+
+      if (this.ruptureState === 'awakening') {
+        const textAlpha = Math.min(1.0, this.ruptureAlpha * 1.5);
+        ctx.fillStyle = `rgba(5, 5, 16, ${textAlpha})`;
+        ctx.font = 'bold 24px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('O Caleidoscópio Gira...', width / 2, height / 2);
+      }
     }
   }
 

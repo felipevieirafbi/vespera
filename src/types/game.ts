@@ -61,6 +61,7 @@ export interface EngineStats {
   isMoving: boolean;
   activeKeys: string[];
   currentBiome: string;
+  currentCycle: number;
   obstaclesInView: number;
   totalObstacles: number;
   collidingX: boolean;

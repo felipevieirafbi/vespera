@@ -1,5 +1,5 @@
 import React from 'react';
-import { RotateCcw, ZoomIn, ZoomOut, Sparkles, Wind, Eye, SunDim } from 'lucide-react';
+import { RotateCcw, ZoomIn, ZoomOut, Sparkles, Wind, Eye, SunDim, AlertTriangle } from 'lucide-react';
 
 interface GameControlsOverlayProps {
   onResetPosition: () => void;
@@ -11,6 +11,7 @@ interface GameControlsOverlayProps {
   onToggleTrail: () => void;
   onToggleParticles: () => void;
   onToggleVignette: () => void;
+  onForceRupture: () => void;
   enableGlow: boolean;
   enableTrail: boolean;
   enableParticles: boolean;
@@ -28,6 +29,7 @@ export const GameControlsOverlay: React.FC<GameControlsOverlayProps> = ({
   onToggleTrail,
   onToggleParticles,
   onToggleVignette,
+  onForceRupture,
   enableGlow,
   enableTrail,
   enableParticles,
@@ -39,6 +41,19 @@ export const GameControlsOverlay: React.FC<GameControlsOverlayProps> = ({
       id="game-controls-toolbar"
       className="flex flex-wrap items-center justify-center gap-1.5 rounded-2xl border border-cyan-500/20 bg-slate-950/85 p-2 backdrop-blur-md shadow-2xl shadow-cyan-950/30"
     >
+      {/* Force Rupture Button */}
+      <button
+        id="btn-force-rupture"
+        onClick={onForceRupture}
+        className="flex items-center gap-1 rounded-lg border border-rose-500/50 bg-rose-950/50 px-3 py-1.5 text-xs font-bold font-mono text-rose-300 hover:bg-rose-900/80 hover:border-rose-400 active:scale-95 transition shadow-[0_0_10px_rgba(244,63,94,0.2)]"
+        title="Colapso Temporal e Regeração do Mundo"
+      >
+        <AlertTriangle className="w-3.5 h-3.5" />
+        <span>FORÇAR RUPTURA (R)</span>
+      </button>
+
+      <div className="h-5 w-[1px] bg-slate-800 mx-0.5" />
+
       {/* Reset Position Origin */}
       <button
         id="btn-reset-origin"

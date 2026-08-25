@@ -25,6 +25,15 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
       id="telemetry-hud-root"
       className="flex flex-col gap-2 max-w-sm pointer-events-none select-none"
     >
+      {/* Realidade Cycle Indicator */}
+      <div className="flex items-center justify-center rounded-xl border border-cyan-500/50 bg-cyan-950/80 p-2 backdrop-blur-md shadow-[0_0_15px_rgba(6,182,212,0.3)]">
+        <h1 className="text-sm font-bold uppercase tracking-widest text-cyan-300 font-mono flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-cyan-400" />
+          CICLO DE REALIDADE: <span className="text-white text-base ml-1">{stats.currentCycle}</span>
+          <Sparkles className="w-4 h-4 text-cyan-400" />
+        </h1>
+      </div>
+
       {/* Primary Metrics Card */}
       <div className="rounded-xl border border-cyan-500/25 bg-slate-950/85 p-3 backdrop-blur-md shadow-2xl shadow-cyan-950/20">
         {/* Header */}
@@ -174,6 +183,15 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
           }`}>
             <Zap className="w-3 h-3 mr-1" />
             SHIFT
+          </div>
+
+          {/* R Rupture key */}
+          <div className={`ml-1 w-8 h-8 flex items-center justify-center rounded border self-end font-bold transition-all ${
+            isKeyActive('r')
+              ? 'border-rose-400 bg-rose-500/40 text-rose-200 shadow-[0_0_12px_#f43f5e]'
+              : 'border-slate-800 bg-slate-900/60 text-slate-500'
+          }`}>
+            R
           </div>
         </div>
       </div>
