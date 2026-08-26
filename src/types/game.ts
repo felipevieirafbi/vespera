@@ -1,5 +1,5 @@
 export type BiomeType = 'quartz_forest' | 'chrono_ruins' | 'crimson_desert';
-export type GameState = 'MENU' | 'SANCTUARY' | 'PLAYING' | 'VICTORY';
+export type GameState = 'MENU' | 'HUB' | 'SANCTUARY' | 'PLAYING' | 'VICTORY';
 
 // Phase 9: Boons (Bênçãos Temporárias)
 export type BoonId = 'colossal_blade' | 'shattering_dash' | 'blood_siphon' | 'frenzy';
@@ -27,8 +27,8 @@ export interface EchoAltar {
 
 export interface PlayerUpgrades {
   vitalityLevel: number; // +20 HP per level (cost: 50)
-  damageLevel: number;   // +15 Damage per level (cost: 75)
-  dashLevel: number;     // -0.15s cooldown per level (cost: 50)
+  damageLevel: number;   // +10 Damage per level (cost: 75)
+  dashLevel: number;     // -20% cooldown per level (cost: 60)
 }
 
 export interface Vector2D {

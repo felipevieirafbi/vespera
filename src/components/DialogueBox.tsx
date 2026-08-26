@@ -44,13 +44,13 @@ export const DialogueBox: React.FC<DialogueBoxProps> = ({
   if (npc.id === 'npc_orion') {
     if (currentCycle <= 1) {
       dialogueContent =
-        'Você despertou, Anomalia. O Caleidoscópio quebrou. Atravesse o portal e traga o Pó de Memória das aberrações.';
+        'Desperte, Anomalia. O Caleidoscópio estilhaçou. Entre no portal e traga o Pó de Memória.';
     } else if (currentCycle >= 2 && currentCycle <= 4) {
       dialogueContent =
-        'A morte não pode te segurar. O tempo lá fora reescreveu suas regras, mas nós estamos seguros aqui. Fortaleça-se.';
+        'A morte é apenas uma porta para nós. Você está ficando mais forte.';
     } else {
       dialogueContent =
-        'Os Senhores do Fragmento estão sentindo sua presença. O labirinto lá fora ficará cruel.';
+        'O Senhor do Fragmento sente o seu poder crescendo lá fora...';
     }
   } else if (npc.id === 'npc_kael') {
     dialogueContent =
@@ -58,10 +58,10 @@ export const DialogueBox: React.FC<DialogueBoxProps> = ({
   } else if (npc.id === 'npc_lyra') {
     if (justAwakened) {
       dialogueContent =
-        'Um lampejo... eu consigo ver! Você me salvou do esquecimento! Nos encontraremos no Santuário quando este ciclo se findar.';
+        'Um lampejo... eu consigo ver! Você me tirou daquele pesadelo! Nos encontraremos no Refúgio quando este ciclo se findar.';
     } else if (isAwakened) {
       dialogueContent =
-        'Você me salvou do esquecimento eterno! O fluxo do tempo lá fora é enlouquecedor. Que o eco da minha magia fortaleça sua jornada.';
+        'Você me tirou daquele pesadelo! O fluxo do tempo lá fora é enlouquecedor. Que o eco da minha magia fortaleça sua jornada.';
     } else {
       dialogueContent =
         'Quem é você? O Caleidoscópio gira e minha mente dói... Não te conheço, forasteiro.';

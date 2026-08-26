@@ -239,7 +239,7 @@ export class GameEngine {
   }
 
   public calculateAttackDamage(): number {
-    return 50 + (this.playerUpgrades.damageLevel || 0) * 15;
+    return 50 + (this.playerUpgrades.damageLevel || 0) * 10;
   }
 
   public calculateAttackCooldown(): number {
@@ -256,7 +256,7 @@ export class GameEngine {
   }
 
   public calculateDashCooldown(): number {
-    return Math.max(0.35, 1.0 - (this.playerUpgrades.dashLevel || 0) * 0.15);
+    return Math.max(0.3, 1.0 * Math.pow(0.8, this.playerUpgrades.dashLevel || 0));
   }
 
   /**
@@ -858,10 +858,10 @@ export class GameEngine {
         for (const enemy of this.enemies) {
           if (enemy.hp <= 0) {
             this.enemiesDefeatedCount++;
-            this.memoryDust += 10;
+            this.memoryDust += 5;
             this.stats.memoryDust = this.memoryDust;
             this.audioManager.playDustCollect();
-            this.addFloatingDamage(enemy.x, enemy.y - 20, '+10 Dust', '#c084fc');
+            this.addFloatingDamage(enemy.x, enemy.y - 20, '+5 Dust', '#c084fc');
 
             // Phase 9 Blood Siphon Boon: +2 HP on kill
             if (this.activeBoons.includes('blood_siphon')) {
@@ -977,11 +977,11 @@ export class GameEngine {
 
           if (enemy.hp <= 0) {
             this.enemiesDefeatedCount++;
-            // Meta-progression reward: +10 Dust
-            this.memoryDust += 10;
+            // Meta-progression reward: +5 Dust
+            this.memoryDust += 5;
             this.stats.memoryDust = this.memoryDust;
             this.audioManager.playDustCollect();
-            this.addFloatingDamage(enemy.x, enemy.y - 20, '+10 Dust', '#c084fc');
+            this.addFloatingDamage(enemy.x, enemy.y - 20, '+5 Dust', '#c084fc');
 
             // Phase 9 Blood Siphon Boon: +2 HP on kill
             if (this.activeBoons.includes('blood_siphon')) {

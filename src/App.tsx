@@ -118,8 +118,8 @@ export default function App() {
   );
 
   const handleStartGame = useCallback(() => {
-    // Awaken starts directly in the peaceful SANCTUARY hub
-    setGameState('SANCTUARY');
+    // Awaken starts directly in the peaceful Refúgio (HUB)
+    setGameState('HUB');
   }, []);
 
   const handleVictory = useCallback((finalStats: EngineStats) => {
@@ -128,8 +128,8 @@ export default function App() {
   }, []);
 
   const handlePlayAgain = useCallback(() => {
-    // Return to SANCTUARY with rewards preserved
-    setGameState('SANCTUARY');
+    // Return to HUB with rewards preserved
+    setGameState('HUB');
   }, []);
 
   const handleReturnToMenu = useCallback(() => {
@@ -150,9 +150,9 @@ export default function App() {
         />
       )}
 
-      {(gameState === 'SANCTUARY' || gameState === 'PLAYING') && (
+      {(gameState === 'HUB' || gameState === 'SANCTUARY' || gameState === 'PLAYING') && (
         <GameCanvas
-          key={gameState === 'SANCTUARY' ? 'sanctuary-hub' : 'open-world'}
+          key={gameState === 'PLAYING' ? 'open-world' : 'hub-refugio'}
           initialGameState={gameState}
           memoryDust={memoryDust}
           upgrades={playerUpgrades}

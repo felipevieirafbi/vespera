@@ -115,11 +115,11 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ stats, zoom }) => {
           </div>
         )}
 
-        {/* Sanctuary Mode Banner or Boss Tracker */}
-        {stats.gameState === 'SANCTUARY' && (
+        {/* Hub / Sanctuary Mode Banner */}
+        {(stats.gameState === 'HUB' || stats.gameState === 'SANCTUARY') && (
           <div className="rounded-lg border border-indigo-500/50 bg-indigo-950/80 p-2 font-mono text-[11px] text-indigo-200 shadow-[0_0_15px_rgba(99,102,241,0.25)]">
             <div className="flex items-center justify-between font-bold mb-0.5">
-              <span className="text-indigo-300">🏛️ O SANTUÁRIO DO VAZIO</span>
+              <span className="text-indigo-300">🏛️ O REFÚGIO DO VAZIO (HUB)</span>
               <span className="text-[9px] bg-indigo-500/30 text-indigo-200 px-1.5 py-0.5 rounded border border-indigo-400/40">ZONA SEGURA</span>
             </div>
             <p className="text-[9.5px] text-slate-400">

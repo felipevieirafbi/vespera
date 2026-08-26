@@ -28,7 +28,7 @@ interface GameCanvasProps {
 }
 
 export const GameCanvas: React.FC<GameCanvasProps> = ({
-  initialGameState = 'SANCTUARY' as GameState,
+  initialGameState = 'HUB' as GameState,
   memoryDust = 0,
   upgrades = { vitalityLevel: 0, damageLevel: 0, dashLevel: 0 },
   lyraRescued = false,
@@ -41,6 +41,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<GameEngine | null>(null);
 
+  const isHubState = initialGameState === 'HUB' || initialGameState === 'SANCTUARY';
+
   const [stats, setStats] = useState<EngineStats>({
     fps: 60,
     deltaTime: 0,
@@ -49,7 +51,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     speed: 0,
     isMoving: false,
     activeKeys: [],
-    currentBiome: initialGameState === 'SANCTUARY' ? 'Santuário do Vazio' : 'Floresta de Quartzo',
+    currentBiome: isHubState ? 'Santuário do Vazio' : 'Floresta de Quartzo',
     currentCycle: currentCycle,
     prismsLeft: 3,
     anchorsCount: 0,
@@ -146,10 +148,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         }
       },
       () => {
-        // Player Died -> Transition to SANCTUARY
+        // Player Died -> Canonical Respawn in Refúgio (HUB)
         setIsBoonSelectOpen(false);
         if (onGameStateChange) {
-          onGameStateChange('SANCTUARY');
+          onGameStateChange('HUB');
         }
       },
       () => {
@@ -374,8 +376,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             <p className="text-[9.5px] text-slate-400 font-mono">A Sinergia • Bênçãos & Novas Ameaças</p>
           </div>
 
-          {/* Quick button to open Soul Forge if in Sanctuary */}
-          {stats.gameState === 'SANCTUARY' && (
+          {/* Quick button to open Soul Forge if in Sanctuary / Hub */}
+          {(stats.gameState === 'HUB' || stats.gameState === 'SANCTUARY') && (
             <button
               onClick={() => setIsForgeOpen(true)}
               className="flex items-center gap-1 ml-1 rounded-lg border border-rose-500/60 bg-rose-950/70 px-2 py-1 text-xs font-mono font-bold text-rose-300 hover:bg-rose-900 transition shadow-[0_0_10px_rgba(244,63,94,0.3)] cursor-pointer"
